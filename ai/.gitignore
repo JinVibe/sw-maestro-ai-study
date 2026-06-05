@@ -1,0 +1,12 @@
+data/raw/*
+!data/raw/.gitkeep
+data/embeddings/*
+!data/embeddings/.gitkeep
+.env
+__pycache__/
+*.pyc
+*.partial
+*.tmp
+*.state.json
+*.errors
+*.sqlite
