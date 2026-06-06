@@ -208,8 +208,27 @@ def verify_with_itunes(
 
 
 def select_final_5(state: RecommendationSessionState) -> dict[str, Any]:
-    # 오케스트레이터 담당자: 검증이 끝난 곡들 중에서 최종 5곡만 남겨 주세요.
-    raise NotImplementedError("오케스트레이터 담당자가 select_final_5를 구현해야 합니다.")
+    # 검증이 끝난 후보 중에서 최종 5곡만 남깁니다.
+    source_candidates = list(state.get("verified_candidates") or state.get("selected_candidates") or [])
+    if not source_candidates:
+        raise ValueError("최종 5곡을 고를 검증 후보가 없습니다.")
+
+    unique_candidates = _deduplicate_candidates(source_candidates)
+    final_candidates: list[dict[str, Any]] = []
+    for order, candidate in enumerate(unique_candidates[:FINAL_BUNDLE_SIZE], start=1):
+        final_candidate = dict(candidate)
+        final_candidate["selection_order"] = order
+        final_candidate.setdefault("slot_type", "anchor" if order == 1 else "discovery")
+        final_candidate.setdefault(
+            "reason",
+            _build_final_reason(candidate, order),
+        )
+        final_candidates.append(final_candidate)
+
+    return {
+        "final_bundle": final_candidates,
+        "next_action": "collect_feedback",
+    }
 
 
 def collect_feedback(state: RecommendationSessionState) -> dict[str, Any]:
@@ -323,6 +342,33 @@ def _enrich_candidate_from_existing_data(candidate: dict[str, Any]) -> dict[str,
     enriched_candidate.setdefault("itunes_track_id", 0)
     enriched_candidate.setdefault("itunes_matched_by", "skip_verification")
     return enriched_candidate
+
+
+def _deduplicate_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[tuple[str, tuple[str, ...]]] = set()
+    unique_candidates: list[dict[str, Any]] = []
+    for candidate in candidates:
+        title = _normalize_text(str(candidate.get("title") or ""))
+        artists = tuple(sorted(_normalize_text(str(artist)) for artist in candidate.get("artists", []) if str(artist).strip()))
+        signature = (title, artists)
+        if signature in seen:
+            continue
+        seen.add(signature)
+        unique_candidates.append(candidate)
+    return unique_candidates
+
+
+def _build_final_reason(candidate: dict[str, Any], order: int) -> str:
+    selection_reason = str(candidate.get("selection_reason") or "").strip()
+    if selection_reason:
+        return selection_reason
+
+    title = str(candidate.get("title") or "").strip()
+    if order == 1 and title:
+        return f"'{title}'를 시작점으로 잡아 전체 분위기를 여는 곡입니다."
+    if title:
+        return f"'{title}'는 검증을 통과한 곡 중에서 흐름을 이어 주는 곡입니다."
+    return "검증을 통과한 곡입니다."
 
 
 def _extract_artist_names(raw_artists: Any) -> list[str]:
