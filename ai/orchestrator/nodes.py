@@ -7,6 +7,7 @@ from __future__ import annotations
 됩니다. 추천 모듈은 같은 상태 구조를 계속 사용할 수 있습니다.
 """
 
+import os
 from datetime import date
 import re
 from typing import Any, Callable, TypedDict
@@ -14,7 +15,8 @@ from typing import Any, Callable, TypedDict
 from ..recommender import UpstageCandidateSelectorClient
 from ..recommender.catalog import load_songs
 from ..recommender.era import release_year
-from ..recommender.models import Song
+from ..recommender.itunes import ItunesSearchClient
+from ..recommender.models import Album, Artist, Song
 from .state import NextAction, RecommendationSessionState
 
 
@@ -171,9 +173,38 @@ def build_candidate_pool(state: RecommendationSessionState) -> dict[str, Any]:
     }
 
 
-def verify_with_itunes(state: RecommendationSessionState) -> dict[str, Any]:
-    # 오케스트레이터 담당자: 미리듣기 불가 곡과 라이브/리마스터 변형을 걸러 주세요.
-    raise NotImplementedError("오케스트레이터 담당자가 verify_with_itunes를 구현해야 합니다.")
+def verify_with_itunes(
+    state: RecommendationSessionState,
+    verifier: ItunesSearchClient | None = None,
+) -> dict[str, Any]:
+    # Upstage가 고른 후보를 iTunes에서 다시 확인합니다.
+    # 테스트 환경에서는 네트워크를 건너뛰고 후보를 그대로 통과시킬 수 있습니다.
+    source_candidates = list(state.get("selected_candidates") or state.get("candidate_pool") or [])
+    if not source_candidates:
+        raise ValueError("검증할 후보가 없습니다.")
+
+    if verifier is None and os.environ.get("AI_SKIP_ITUNES_VERIFICATION", "").strip().lower() in {"1", "true", "yes"}:
+        verified_candidates = [_enrich_candidate_from_existing_data(candidate) for candidate in source_candidates]
+        return {"verified_candidates": verified_candidates}
+
+    verifier = verifier or ItunesSearchClient()
+    verified_candidates: list[dict[str, Any]] = []
+    for candidate in source_candidates:
+        song = _song_from_candidate(candidate)
+        if song is None:
+            continue
+        verification = verifier.verify(song)
+        if verification is None:
+            continue
+
+        enriched_candidate = dict(candidate)
+        enriched_candidate["preview_url"] = verification.track.preview_url
+        enriched_candidate["album_art_url"] = verification.track.artwork_url
+        enriched_candidate["itunes_track_id"] = verification.track.track_id
+        enriched_candidate["itunes_matched_by"] = verification.matched_by
+        verified_candidates.append(enriched_candidate)
+
+    return {"verified_candidates": verified_candidates}
 
 
 def select_final_5(state: RecommendationSessionState) -> dict[str, Any]:
@@ -257,6 +288,41 @@ def _candidate_record_from_item(item: Any) -> CandidateRecord | None:
         return candidate
 
     return None
+
+
+def _song_from_candidate(candidate: dict[str, Any]) -> Song | None:
+    song_id = str(candidate.get("song_id") or "").strip()
+    title = str(candidate.get("title") or "").strip()
+    if not song_id or not title:
+        return None
+
+    artists = [
+        Artist(name=str(artist).strip())
+        for artist in candidate.get("artists", [])
+        if str(artist).strip()
+    ]
+    album = Album(name=str(candidate.get("album") or "").strip())
+    return Song(
+        song_id=song_id,
+        title=title,
+        artists=artists,
+        album=album,
+        release_date=str(candidate.get("release_date") or "").strip() or None,
+        genres=[str(genre).strip() for genre in candidate.get("genres", []) if str(genre).strip()],
+        like_count=int(candidate.get("like_count") or 0),
+        lyrics=str(candidate.get("lyrics") or ""),
+        chart_appearances=list(candidate.get("chart_appearances") or []),
+        source_urls=dict(candidate.get("source_urls") or {}),
+    )
+
+
+def _enrich_candidate_from_existing_data(candidate: dict[str, Any]) -> dict[str, Any]:
+    enriched_candidate = dict(candidate)
+    enriched_candidate.setdefault("preview_url", str(enriched_candidate.get("preview_url") or ""))
+    enriched_candidate.setdefault("album_art_url", str(enriched_candidate.get("album_art_url") or ""))
+    enriched_candidate.setdefault("itunes_track_id", 0)
+    enriched_candidate.setdefault("itunes_matched_by", "skip_verification")
+    return enriched_candidate
 
 
 def _extract_artist_names(raw_artists: Any) -> list[str]:
