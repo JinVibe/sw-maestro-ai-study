@@ -16,6 +16,8 @@ from ..recommender import UpstageCandidateSelectorClient
 from ..recommender.catalog import load_songs
 from ..recommender.era import release_year
 from ..recommender.itunes import ItunesSearchClient
+from ..recommender.feedback import count_negative_feedbacks
+from ..recommender.models import Feedback
 from ..recommender.models import Album, Artist, Song
 from .state import NextAction, RecommendationSessionState
 
@@ -232,18 +234,41 @@ def select_final_5(state: RecommendationSessionState) -> dict[str, Any]:
 
 
 def collect_feedback(state: RecommendationSessionState) -> dict[str, Any]:
-    # 오케스트레이터 담당자: 좋아요/싫어요를 집계해서 세션 상태를 갱신해 주세요.
-    raise NotImplementedError("오케스트레이터 담당자가 collect_feedback를 구현해야 합니다.")
+    # 현재 번들의 좋아요/싫어요를 집계하고, 다음 라운드에서 제외할 곡들을 기록합니다.
+    feedback_songs = _extract_feedback_songs(state)
+    if not feedback_songs:
+        raise ValueError("집계할 피드백이 없습니다.")
+
+    feedbacks = [_feedback_from_song(song) for song in feedback_songs]
+    negative_count = count_negative_feedbacks(feedbacks)
+    exclude_song_ids = _merge_exclude_song_ids(
+        state.get("exclude_song_ids", []),
+        [feedback.song_id for feedback in feedbacks],
+    )
+
+    return {
+        "negative_count": negative_count,
+        "exclude_song_ids": exclude_song_ids,
+    }
 
 
 def decide_next_action(state: RecommendationSessionState) -> dict[str, Any]:
-    # 오케스트레이터 담당자: 갱신된 상태를 바탕으로 다음 그래프 분기를 결정해 주세요.
-    raise NotImplementedError("오케스트레이터 담당자가 decide_next_action를 구현해야 합니다.")
+    # 싫어요가 3개 이상이고 추가 피드백 문장이 없으면 먼저 추가 질문을 요청합니다.
+    negative_count = int(state.get("negative_count") or 0)
+    follow_up_text = str(state.get("follow_up_text") or "").strip()
+
+    if negative_count >= 3 and not follow_up_text:
+        next_action: NextAction = "request_follow_up_text"
+    else:
+        next_action = "recommend_next_bundle"
+
+    return {"next_action": next_action}
 
 
 def route_after_feedback(state: RecommendationSessionState) -> NextAction:
-    # 오케스트레이터 담당자: 조건부 엣지에서 사용할 라우트 키를 반환해 주세요.
-    raise NotImplementedError("오케스트레이터 담당자가 route_after_feedback를 구현해야 합니다.")
+    # decide_next_action에서 정한 다음 행동 값을 그대로 반환합니다.
+    next_action = state.get("next_action") or "recommend_next_bundle"
+    return next_action  # type: ignore[return-value]
 
 
 def _load_candidate_source_items(state: RecommendationSessionState) -> list[Any]:
@@ -342,6 +367,41 @@ def _enrich_candidate_from_existing_data(candidate: dict[str, Any]) -> dict[str,
     enriched_candidate.setdefault("itunes_track_id", 0)
     enriched_candidate.setdefault("itunes_matched_by", "skip_verification")
     return enriched_candidate
+
+
+def _extract_feedback_songs(state: RecommendationSessionState) -> list[dict[str, Any]]:
+    context = state.get("context") or {}
+    if isinstance(context, dict):
+        songs = context.get("songs", [])
+        if isinstance(songs, list) and songs:
+            return [song for song in songs if isinstance(song, dict)]
+
+    final_bundle = state.get("final_bundle", [])
+    if isinstance(final_bundle, list) and final_bundle:
+        return [song for song in final_bundle if isinstance(song, dict)]
+
+    return []
+
+
+def _feedback_from_song(song: dict[str, Any]) -> Feedback:
+    return Feedback(
+        song_id=str(song.get("song_id") or "").strip(),
+        reaction=str(song.get("reaction") or "").strip(),
+        comment=str(song.get("comment") or "").strip(),
+        saved=bool(song.get("saved", False)),
+    )
+
+
+def _merge_exclude_song_ids(existing_ids: list[str], new_ids: list[str]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for song_id in [*existing_ids, *new_ids]:
+        normalized = str(song_id).strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        merged.append(normalized)
+    return merged
 
 
 def _deduplicate_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
