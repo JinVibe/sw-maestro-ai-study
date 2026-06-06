@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import math
 
-from .models import RecommendationRequest, ScoreBreakdown, Song
 from .era import era_score, preferred_year_center_from_age, release_year
+from .models import RecommendationRequest, ScoreBreakdown, Song
 
 
 DEFAULT_WEIGHTS = {"w_theme": 0.50, "w_era": 0.20, "w_discovery": 0.20, "w_quality": 0.10}
@@ -27,9 +27,12 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
 
 def calculate_quality_score(song: Song) -> float:
     like_score = min(math.log1p(max(song.like_count, 0)) / 12.0, 0.4)
-    best_rank = min((appearance.get("rank", 101) for appearance in song.chart_appearances), default=101)  # 곡 최고 순위(년도 상관 x)
-    chart_score = 0.35 if best_rank <= 10 else 0.25 if best_rank <= 50 else 0.15 if best_rank <= 100 else 0.0  # 최고 순위 
-    completeness = sum(    # 메타 데이터 완성도
+    # 곡 최고 순위(연도와 무관)
+    best_rank = min((appearance.get("rank", 101) for appearance in song.chart_appearances), default=101)
+    # 최고 순위 기준 점수
+    chart_score = 0.35 if best_rank <= 10 else 0.25 if best_rank <= 50 else 0.15 if best_rank <= 100 else 0.0
+    # 메타데이터 완성도
+    completeness = sum(
         [
             bool(song.title),
             bool(song.artists),

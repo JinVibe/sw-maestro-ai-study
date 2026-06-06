@@ -34,9 +34,10 @@ def build_parser() -> argparse.ArgumentParser:
     recommend.add_argument("--genres", nargs="*", default=[])
     recommend.add_argument("--artists", nargs="*", default=[])
     recommend.add_argument("--text", default="")
+    recommend.add_argument("--context-text", default="", help="Optional orchestrator context text for future LLM-based recommendation.")
     recommend.add_argument("--age", type=int, required=True)
     recommend.add_argument("--strategy-weights", default="", help="JSON object with w_theme, w_era, w_discovery, w_quality.")
-    recommend.add_argument("--bundle-size", type=int, default=6)
+    recommend.add_argument("--bundle-size", type=int, default=5)
     recommend.add_argument("--exclude-song-ids", nargs="*", default=[])
     recommend.add_argument("--embedding-batch-size", type=int, default=32)
     return parser
@@ -92,6 +93,7 @@ def recommend(args: argparse.Namespace, client: UpstageEmbeddingClient | None = 
             preferred_artists=args.artists,
             age=args.age,
             free_text=args.text,
+            context_text=args.context_text,
             exclude_song_ids=args.exclude_song_ids,
             strategy_weights=strategy_weights,
             options={"bundle_size": args.bundle_size},

@@ -47,9 +47,9 @@ class EngineTest(unittest.TestCase):
                 )
             )
 
-        self.assertEqual(len(bundle.songs), 6)
+        self.assertEqual(len(bundle.songs), 5)
         self.assertEqual(bundle.next_action, "collect_feedback")
-        self.assertEqual(len({song.song_id for song in bundle.songs}), 6)
+        self.assertEqual(len({song.song_id for song in bundle.songs}), 5)
         self.assertIsNotNone(bundle.songs[0].score_breakdown)
 
     def test_recommend_accepts_bundle_size_between_five_and_seven(self) -> None:

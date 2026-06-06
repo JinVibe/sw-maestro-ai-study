@@ -3,24 +3,30 @@ from __future__ import annotations
 import unittest
 
 from ai.recommender.feedback import (
+    count_negative_feedbacks,
+    count_negative_streak,
     count_unknown_streak,
     next_action_from_feedback,
     process_feedback,
-    rating_to_signal,
     update_preferred_year_center,
 )
 from ai.recommender.models import Feedback, ScoreBreakdown
 
 
 class FeedbackTest(unittest.TestCase):
-    def test_rating_to_signal_maps_one_to_five(self) -> None:
-        self.assertEqual([rating_to_signal(i) for i in range(1, 6)], [-1.0, -0.5, 0.0, 0.5, 1.0])
+    def test_negative_feedbacks_count_dislikes_in_single_bundle(self) -> None:
+        feedbacks = [
+            Feedback(song_id="1", reaction="좋아요"),
+            Feedback(song_id="2", reaction="싫어요"),
+            Feedback(song_id="3", reaction="좋아요"),
+            Feedback(song_id="4", reaction="싫어요"),
+            Feedback(song_id="5", reaction="싫어요"),
+        ]
 
-    def test_unknown_three_times_returns_follow_up_question(self) -> None:
-        feedbacks = [Feedback(song_id=str(i), reaction="몰라요", rating=3) for i in range(3)]
-
-        self.assertEqual(count_unknown_streak(feedbacks, 0), 3)
-        self.assertEqual(next_action_from_feedback(feedbacks, 0), "follow_up_question")
+        self.assertEqual(count_negative_feedbacks(feedbacks), 3)
+        self.assertEqual(count_negative_streak(feedbacks), 3)
+        self.assertEqual(count_unknown_streak(feedbacks), 3)
+        self.assertEqual(next_action_from_feedback(feedbacks), "request_follow_up_text")
 
     def test_update_preferred_year_center_uses_agent_numeric_shift(self) -> None:
         self.assertEqual(update_preferred_year_center(2012.5, era_shift=-4), 2008.5)
@@ -35,8 +41,7 @@ class FeedbackTest(unittest.TestCase):
         feedbacks = [
             Feedback(
                 song_id="1",
-                reaction="듣고 싶어요",
-                rating=5,
+                reaction="좋아요",
                 score_breakdown=ScoreBreakdown(
                     theme=0.1,
                     era=0.9,
@@ -45,20 +50,22 @@ class FeedbackTest(unittest.TestCase):
                     penalties=0.0,
                     final=0.0,
                 ),
-            )
+            ),
+            Feedback(song_id="2", reaction="싫어요"),
+            Feedback(song_id="3", reaction="싫어요"),
+            Feedback(song_id="4", reaction="좋아요"),
+            Feedback(song_id="5", reaction="싫어요"),
         ]
 
         updated = process_feedback(
             feedbacks=feedbacks,
             preferred_year_center=2012.5,
             era_shift=-4,
-            previous_unknown_streak=0,
         )
 
         self.assertEqual(updated.preferred_year_center, 2008.5)
-        self.assertEqual(updated.next_action, "recommend_next_bundle")
-        self.assertEqual(updated.unknown_streak, 0)
-        self.assertFalse(hasattr(updated, "updated_weights"))
+        self.assertEqual(updated.next_action, "request_follow_up_text")
+        self.assertEqual(updated.negative_count, 3)
 
     def test_process_feedback_calculates_initial_preferred_year_center_from_age(self) -> None:
         updated = process_feedback(
@@ -66,10 +73,11 @@ class FeedbackTest(unittest.TestCase):
             preferred_year_center=None,
             age=36,
             era_shift=-4,
-            previous_unknown_streak=0,
         )
 
         self.assertEqual(updated.preferred_year_center, 2008.5)
+        self.assertEqual(updated.next_action, "recommend_next_bundle")
+        self.assertEqual(updated.negative_count, 0)
 
 
 if __name__ == "__main__":

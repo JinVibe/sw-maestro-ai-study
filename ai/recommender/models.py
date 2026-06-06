@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
-REACTIONS = {"알아요", "듣고 싶어요", "몰라요"}
+REACTIONS = {"\uc88b\uc544\uc694", "\uc2eb\uc5b4\uc694"}
 
 
 @dataclass(frozen=True)
@@ -36,7 +36,7 @@ class Song:
 
 @dataclass(frozen=True)
 class RecommendationOptions:
-    bundle_size: int = 6
+    bundle_size: int = 5
     include_preview: bool = True
     include_album_art: bool = True
 
@@ -55,6 +55,8 @@ class RecommendationRequest:
     preferred_artists: list[str] = field(default_factory=list)
     mood_keywords: list[str] = field(default_factory=list)
     free_text: str = ""
+    # 오케스트레이터가 넘겨주는 context text입니다. 앞으로 프롬프트 기반 랭킹에 사용합니다.
+    context_text: str = ""
     exclude_song_ids: list[str] = field(default_factory=list)
     strategy_weights: dict[str, float] | None = None
     options: RecommendationOptions | dict[str, Any] = field(default_factory=RecommendationOptions)
@@ -116,7 +118,6 @@ class RecommendationBundle:
 class Feedback:
     song_id: str
     reaction: str
-    rating: int
     comment: str = ""
     saved: bool = False
     score_breakdown: ScoreBreakdown | None = None
@@ -125,12 +126,10 @@ class Feedback:
     def __post_init__(self) -> None:
         if self.reaction not in REACTIONS:
             raise ValueError(f"reaction must be one of {sorted(REACTIONS)}")
-        if not 1 <= self.rating <= 5:
-            raise ValueError("rating must be between 1 and 5")
 
 
 @dataclass(frozen=True)
 class UpdatedProfile:
     preferred_year_center: float
-    unknown_streak: int
+    negative_count: int
     next_action: str

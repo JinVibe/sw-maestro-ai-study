@@ -43,6 +43,8 @@ class RecommendationEngine:
             raise RecommendationInputError("free_text is required for lyrics-based recommendation")
         if request.age is None:
             raise RecommendationInputError("age is required for era-aware recommendation")
+        # `context_text`는 앞으로 프롬프트 기반 LLM 경로에서 사용할 예정입니다.
+        # 현재 점수 엔진은 동작 안정성을 위해 `free_text`만 사용합니다.
         query_embedding = self.embedding_client.embed_query(query_text)
         candidates = self._prefilter_candidates(request)
         self._ensure_candidate_embeddings(candidates)
@@ -50,6 +52,7 @@ class RecommendationEngine:
         if len(candidates) < request.options.bundle_size:
             raise RecommendationInputError("not enough embeddable candidate songs for requested bundle_size")
         selected: list[Song] = []
+        selected_identities: set[tuple[str, tuple[str, ...]]] = set()
         recommended: list[RecommendedSong] = []
         remaining = candidates
         while remaining and len(recommended) < request.options.bundle_size:
@@ -76,6 +79,9 @@ class RecommendationEngine:
             verification = None
             rejected_song_ids: set[str] = set()
             for candidate_breakdown, candidate_song in scored:
+                candidate_identity = self._song_identity(candidate_song)
+                if candidate_identity in selected_identities:
+                    continue
                 verification = self.itunes_verifier.verify(candidate_song)
                 if verification is not None:
                     breakdown = candidate_breakdown
@@ -86,6 +92,7 @@ class RecommendationEngine:
                 raise RecommendationInputError("not enough iTunes-verified candidate songs for requested bundle_size")
             track = verification.track if verification is not None else None
             selected.append(song)
+            selected_identities.add(self._song_identity(song))
             recommended.append(
                 RecommendedSong(
                     song_id=song.song_id,
@@ -99,7 +106,13 @@ class RecommendationEngine:
                     score_breakdown=breakdown,
                 )
             )
-            remaining = [song for song in remaining if song.song_id != selected[-1].song_id and song.song_id not in rejected_song_ids]
+            remaining = [
+                song
+                for song in remaining
+                if song.song_id != selected[-1].song_id
+                and song.song_id not in rejected_song_ids
+                and self._song_identity(song) not in selected_identities
+            ]
         return RecommendationBundle(
             bundle_id=f"bundle_{uuid.uuid4().hex[:12]}",
             emotion_title=self._emotion_title(request),
@@ -130,6 +143,7 @@ class RecommendationEngine:
 
     def _prefilter_candidates(self, request: RecommendationRequest) -> list[Song]:
         base = [song for song in self.songs if song.song_id not in set(request.exclude_song_ids) and build_lyrics_text(song)]
+        base = self._unique_songs(base)
         if len(base) < request.options.bundle_size:
             raise RecommendationInputError("not enough candidate songs after excluding unavailable lyrics")
         target_size = max(request.options.bundle_size * 10, 50)
@@ -196,6 +210,28 @@ class RecommendationEngine:
                 )
             if self.embedding_cache_path is not None:
                 write_embedding_cache(self.embedding_cache_path, self.embeddings)
+
+    @classmethod
+    def _unique_songs(cls, songs: list[Song]) -> list[Song]:
+        unique: list[Song] = []
+        seen: set[tuple[str, tuple[str, ...]]] = set()
+        for song in songs:
+            key = cls._song_identity(song)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(song)
+        return unique
+
+    @staticmethod
+    def _normalize_identity_text(value: str) -> str:
+        return " ".join(value.casefold().strip().split())
+
+    @classmethod
+    def _song_identity(cls, song: Song) -> tuple[str, tuple[str, ...]]:
+        title = cls._normalize_identity_text(song.title)
+        artists = tuple(sorted(cls._normalize_identity_text(artist.name) for artist in song.artists if artist.name.strip()))
+        return title, artists
 
 
 class _AlwaysVerifiedItunesVerifier:

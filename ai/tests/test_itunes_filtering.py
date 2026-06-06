@@ -59,6 +59,31 @@ class ItunesFilteringTests(TestCase):
 
         self.assertEqual([song.song_id for song in bundle.songs], ["2", "3", "4", "5", "6"])
 
+    def test_engine_deduplicates_same_title_and_artists_even_with_different_song_ids(self) -> None:
+        songs = [
+            Song(song_id="1", title="Duplicate", artists=[Artist(name="A")], album=Album(name="Album 1"), release_date="2012.01.01", lyrics="duplicate lyrics"),
+            Song(song_id="2", title="Duplicate", artists=[Artist(name="A")], album=Album(name="Album 2"), release_date="2012.01.01", lyrics="duplicate lyrics"),
+            Song(song_id="3", title="Unique", artists=[Artist(name="B")], album=Album(name="Album 3"), release_date="2012.01.01", lyrics="unique lyrics"),
+            Song(song_id="4", title="Unique 2", artists=[Artist(name="C")], album=Album(name="Album 4"), release_date="2012.01.01", lyrics="unique lyrics 2"),
+            Song(song_id="5", title="Unique 3", artists=[Artist(name="D")], album=Album(name="Album 5"), release_date="2012.01.01", lyrics="unique lyrics 3"),
+            Song(song_id="6", title="Unique 4", artists=[Artist(name="E")], album=Album(name="Album 6"), release_date="2012.01.01", lyrics="unique lyrics 4"),
+        ]
+        embeddings = {
+            "1": CachedEmbedding("1", "model", "hash-1", [1.0, 0.0], "lyrics"),
+            "2": CachedEmbedding("2", "model", "hash-2", [1.0, 0.0], "lyrics"),
+            "3": CachedEmbedding("3", "model", "hash-3", [0.0, 1.0], "lyrics"),
+            "4": CachedEmbedding("4", "model", "hash-4", [0.0, 1.0], "lyrics"),
+            "5": CachedEmbedding("5", "model", "hash-5", [0.0, 1.0], "lyrics"),
+            "6": CachedEmbedding("6", "model", "hash-6", [0.0, 1.0], "lyrics"),
+        }
+        engine = RecommendationEngine(songs, embeddings, FakeEmbeddingClient(), itunes_verifier=FakeItunesVerifier({"1", "2", "3", "4", "5", "6"}))
+
+        bundle = engine.recommend(RecommendationRequest(free_text="공부할 때 듣고 싶어요", age=25, options={"bundle_size": 5}))
+
+        self.assertEqual(len(bundle.songs), 5)
+        self.assertEqual([song.title for song in bundle.songs].count("Duplicate"), 1)
+        self.assertEqual(len({song.title for song in bundle.songs}), 5)
+
     def test_itunes_search_client_requires_preview_and_matching_track(self) -> None:
         payload = {
             "resultCount": 2,
