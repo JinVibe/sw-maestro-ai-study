@@ -16,7 +16,6 @@ class SelectionSignals(TypedDict, total=False):
     artist: float
     text: float
     feedback: float
-    priority: float
 
 
 class SelectionContextSongFeedback(TypedDict, total=False):
@@ -24,7 +23,6 @@ class SelectionContextSongFeedback(TypedDict, total=False):
     title: str
     artists: list[str]
     reaction: str
-    comment: str
 
 
 class SelectionContext(TypedDict, total=False):
@@ -42,7 +40,6 @@ class SelectionCandidate(TypedDict, total=False):
     like_count: int
     lyrics_excerpt: str
     match_signals: SelectionSignals
-    notes: str
 
 
 class CandidateSelectionInput(TypedDict, total=False):
