@@ -17,7 +17,12 @@ from .selection import (
     normalize_candidate_pool,
     parse_candidate_selection_output,
 )
-from .upstage_selection_client import UPSTAGE_DEFAULT_CHAT_MODEL, UpstageCandidateSelectorClient, UpstageSelectionError
+from .upstage_client import (
+    UPSTAGE_DEFAULT_CHAT_MODEL,
+    UpstageCandidateSelectorClient,
+    UpstageEmbeddingClient,
+    UpstageSelectionError,
+)
 
 __all__ = [
     "CANDIDATE_SELECTION_TARGET_SIZE",
@@ -25,6 +30,7 @@ __all__ = [
     "CandidateSelectionInput",
     "CandidateSelectionOutput",
     "UPSTAGE_DEFAULT_CHAT_MODEL",
+    "UpstageEmbeddingClient",
     "UpstageCandidateSelectorClient",
     "UpstageSelectionError",
     "PromptMessage",

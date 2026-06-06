@@ -10,7 +10,7 @@ NextAction = Literal[
     "finish",
 ]
 
-Reaction = Literal["\uc88b\uc544\uc694", "\uc2eb\uc5b4\uc694"]
+Reaction = Literal["좋아요", "싫어요"]
 
 
 class ContextSongFeedback(TypedDict, total=False):
@@ -39,6 +39,12 @@ class RecommendationSessionState(TypedDict, total=False):
     context_text: str
     follow_up_text: str
 
+    # 후보 풀을 만들기 위해 오케스트레이터가 넘겨줄 수 있는 원본 카탈로그 경로입니다.
+    catalog_path: str
+    # 이미 메모리에 있는 카탈로그 후보입니다.
+    catalog: list[dict[str, Any]]
+    candidate_source: list[dict[str, Any]]
+
     exclude_song_ids: list[str]
     # 가장 최근 번들에서 누적된 싫어요 수입니다.
     negative_count: int
@@ -48,6 +54,9 @@ class RecommendationSessionState(TypedDict, total=False):
     selected_candidates: list[dict[str, Any]]
     verified_candidates: list[dict[str, Any]]
     final_bundle: list[dict[str, Any]]
+
+    candidate_pool_source_count: int
+    candidate_pool_count: int
 
 
 DEFAULT_NEXT_ACTION: NextAction = "recommend_next_bundle"
