@@ -17,6 +17,15 @@ from .selection import (
     normalize_candidate_pool,
     parse_candidate_selection_output,
 )
+from .engine import (
+    CANDIDATE_POOL_SIZE,
+    CandidateRecord,
+    CandidateSelector,
+    build_candidate_pool,
+    llm_select_20_candidates,
+    select_final_5,
+    verify_with_itunes,
+)
 from .preference_expansion import (
     PreferenceExpansionInput,
     PreferenceExpansionOutput,
@@ -37,7 +46,10 @@ from .upstage_client import (
 
 __all__ = [
     "CANDIDATE_SELECTION_TARGET_SIZE",
+    "CANDIDATE_POOL_SIZE",
     "FINAL_BUNDLE_SIZE",
+    "CandidateRecord",
+    "CandidateSelector",
     "CandidateSelectionInput",
     "CandidateSelectionOutput",
     "PreferenceExpansionInput",
@@ -48,7 +60,9 @@ __all__ = [
     "UpstagePreferenceExpanderClient",
     "UpstagePreferenceExpansionError",
     "UpstageSelectionError",
+    "build_candidate_pool",
     "PromptMessage",
+    "llm_select_20_candidates",
     "SelectionCandidate",
     "SelectionContext",
     "SelectionContextSongFeedback",
@@ -64,4 +78,6 @@ __all__ = [
     "normalize_expanded_preferences",
     "parse_candidate_selection_output",
     "parse_preference_expansion_output",
+    "select_final_5",
+    "verify_with_itunes",
 ]
