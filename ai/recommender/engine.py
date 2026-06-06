@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import os
 import uuid
 from pathlib import Path
 
 from .catalog import build_lyrics_text
 from .embedding_store import CachedEmbedding
 from .errors import RecommendationInputError
+from .itunes import ItunesSearchClient, ItunesVerifier, ItunesTrack, VerificationResult
 from .models import RecommendationBundle, RecommendationRequest, RecommendedSong, Song
 from .embedding_store import EMBEDDING_SOURCE, hash_text, write_embedding_cache
 from .era import preferred_year_center_from_age, release_year
@@ -19,12 +21,19 @@ class RecommendationEngine:
         songs: list[Song],
         embeddings: dict[str, CachedEmbedding],
         embedding_client: object,
+        itunes_verifier: ItunesVerifier | None = None,
         embedding_cache_path: Path | None = None,
         embedding_batch_size: int = 32,
     ) -> None:
         self.songs = songs
         self.embeddings = embeddings
         self.embedding_client = embedding_client
+        if itunes_verifier is not None:
+            self.itunes_verifier = itunes_verifier
+        elif os.environ.get("AI_SKIP_ITUNES_VERIFICATION", "").strip().lower() in {"1", "true", "yes"}:
+            self.itunes_verifier = _AlwaysVerifiedItunesVerifier()
+        else:
+            self.itunes_verifier = ItunesSearchClient()
         self.embedding_cache_path = embedding_cache_path
         self.embedding_batch_size = embedding_batch_size
 
@@ -62,7 +71,20 @@ class RecommendationEngine:
                     )
                 )
             scored.sort(key=lambda item: item[0].final, reverse=True)
-            breakdown, song = scored[0]
+            breakdown = None
+            song = None
+            verification = None
+            rejected_song_ids: set[str] = set()
+            for candidate_breakdown, candidate_song in scored:
+                verification = self.itunes_verifier.verify(candidate_song)
+                if verification is not None:
+                    breakdown = candidate_breakdown
+                    song = candidate_song
+                    break
+                rejected_song_ids.add(candidate_song.song_id)
+            if breakdown is None or song is None:
+                raise RecommendationInputError("not enough iTunes-verified candidate songs for requested bundle_size")
+            track = verification.track if verification is not None else None
             selected.append(song)
             recommended.append(
                 RecommendedSong(
@@ -70,12 +92,14 @@ class RecommendationEngine:
                     title=song.title,
                     artists=[artist.name for artist in song.artists],
                     album=song.album.name,
+                    album_art_url=track.artwork_url if track is not None else "",
+                    preview_url=track.preview_url if track is not None else "",
                     slot_type=self._slot_type(len(recommended), breakdown),
                     reason=self._reason(query_text, breakdown),
                     score_breakdown=breakdown,
                 )
             )
-            remaining = [song for song in remaining if song.song_id != selected[-1].song_id]
+            remaining = [song for song in remaining if song.song_id != selected[-1].song_id and song.song_id not in rejected_song_ids]
         return RecommendationBundle(
             bundle_id=f"bundle_{uuid.uuid4().hex[:12]}",
             emotion_title=self._emotion_title(request),
@@ -172,3 +196,19 @@ class RecommendationEngine:
                 )
             if self.embedding_cache_path is not None:
                 write_embedding_cache(self.embedding_cache_path, self.embeddings)
+
+
+class _AlwaysVerifiedItunesVerifier:
+    def verify(self, song: Song):
+        return VerificationResult(
+            track=ItunesTrack(
+                track_id=int(song.song_id) if str(song.song_id).isdigit() else 0,
+                track_name=song.title,
+                artist_name=song.artists[0].name if song.artists else "",
+                collection_name=song.album.name,
+                preview_url="",
+                artwork_url="",
+                release_date=song.release_date or "",
+            ),
+            matched_by="skip",
+        )
