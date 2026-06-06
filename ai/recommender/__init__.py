@@ -17,10 +17,21 @@ from .selection import (
     normalize_candidate_pool,
     parse_candidate_selection_output,
 )
+from .preference_expansion import (
+    PreferenceExpansionInput,
+    PreferenceExpansionOutput,
+    build_preference_expansion_messages,
+    build_preference_expansion_system_prompt,
+    build_preference_expansion_user_prompt,
+    normalize_expanded_preferences,
+    parse_preference_expansion_output,
+)
 from .upstage_client import (
     UPSTAGE_DEFAULT_CHAT_MODEL,
     UpstageCandidateSelectorClient,
     UpstageEmbeddingClient,
+    UpstagePreferenceExpanderClient,
+    UpstagePreferenceExpansionError,
     UpstageSelectionError,
 )
 
@@ -29,9 +40,13 @@ __all__ = [
     "FINAL_BUNDLE_SIZE",
     "CandidateSelectionInput",
     "CandidateSelectionOutput",
+    "PreferenceExpansionInput",
+    "PreferenceExpansionOutput",
     "UPSTAGE_DEFAULT_CHAT_MODEL",
     "UpstageEmbeddingClient",
     "UpstageCandidateSelectorClient",
+    "UpstagePreferenceExpanderClient",
+    "UpstagePreferenceExpansionError",
     "UpstageSelectionError",
     "PromptMessage",
     "SelectionCandidate",
@@ -41,7 +56,12 @@ __all__ = [
     "build_candidate_selection_messages",
     "build_candidate_selection_system_prompt",
     "build_candidate_selection_user_prompt",
+    "build_preference_expansion_messages",
+    "build_preference_expansion_system_prompt",
+    "build_preference_expansion_user_prompt",
     "candidate_selection_input_from_state",
     "normalize_candidate_pool",
+    "normalize_expanded_preferences",
     "parse_candidate_selection_output",
+    "parse_preference_expansion_output",
 ]

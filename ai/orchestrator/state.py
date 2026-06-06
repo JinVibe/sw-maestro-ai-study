@@ -44,6 +44,9 @@ class RecommendationSessionState(TypedDict, total=False):
     # 이미 메모리에 있는 카탈로그 후보입니다.
     catalog: list[dict[str, Any]]
     candidate_source: list[dict[str, Any]]
+    expanded_preferred_genres: list[str]
+    expanded_preferred_artists: list[str]
+    preference_expansion: dict[str, Any]
 
     exclude_song_ids: list[str]
     # 가장 최근 번들에서 누적된 싫어요 수입니다.

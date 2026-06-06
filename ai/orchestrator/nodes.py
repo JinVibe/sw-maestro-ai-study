@@ -16,6 +16,11 @@ from ..recommender import UpstageCandidateSelectorClient
 from ..recommender.catalog import load_songs
 from ..recommender.era import release_year
 from ..recommender.itunes import ItunesSearchClient
+from ..recommender.preference_expansion import (
+    PreferenceExpansionOutput,
+    normalize_expanded_preferences,
+)
+from ..recommender import UpstagePreferenceExpanderClient
 from ..recommender.feedback import count_negative_feedbacks
 from ..recommender.models import Feedback
 from ..recommender.models import Album, Artist, Song
@@ -90,7 +95,14 @@ def llm_select_20_candidates(
         raise ValueError("candidate_pool이 비어 있어서 LLM 후보 선택을 수행할 수 없습니다.")
 
     selector = selector or UpstageCandidateSelectorClient()
-    selection = selector.select_candidates_from_state(state)
+    selector_state = dict(state)
+    expanded_genres = list(state.get("expanded_preferred_genres") or [])
+    expanded_artists = list(state.get("expanded_preferred_artists") or [])
+    if expanded_genres:
+        selector_state["preferred_genres"] = expanded_genres
+    if expanded_artists:
+        selector_state["preferred_artists"] = expanded_artists
+    selection = selector.select_candidates_from_state(selector_state)
 
     candidate_index = {
         candidate.get("song_id", ""): candidate
@@ -112,7 +124,10 @@ def llm_select_20_candidates(
     }
 
 
-def build_candidate_pool(state: RecommendationSessionState) -> dict[str, Any]:
+def build_candidate_pool(
+    state: RecommendationSessionState,
+    preference_expander: UpstagePreferenceExpanderClient | None = None,
+) -> dict[str, Any]:
     # 카탈로그와 세션 맥락을 바탕으로 후보 풀을 점수화합니다.
     source_items = _load_candidate_source_items(state)
     if not source_items:
@@ -120,10 +135,18 @@ def build_candidate_pool(state: RecommendationSessionState) -> dict[str, Any]:
 
     exclude_song_ids = {song_id.strip() for song_id in state.get("exclude_song_ids", []) if song_id.strip()}
     target_year = _target_year_from_state(state)
-    preferred_genres = state.get("preferred_genres", [])
-    preferred_artists = state.get("preferred_artists", [])
+    preferred_genres = list(state.get("preferred_genres", []) or [])
+    preferred_artists = list(state.get("preferred_artists", []) or [])
     free_text = state.get("free_text", "")
     context = state.get("context", {})
+    expanded_preferences = _expand_preferences(
+        state,
+        preference_expander=preference_expander,
+        preferred_genres=preferred_genres,
+        preferred_artists=preferred_artists,
+    )
+    preferred_genres = expanded_preferences["expanded_preferred_genres"] or preferred_genres
+    preferred_artists = expanded_preferences["expanded_preferred_artists"] or preferred_artists
 
     candidate_pool: list[CandidateRecord] = []
     for item in source_items:
@@ -172,6 +195,9 @@ def build_candidate_pool(state: RecommendationSessionState) -> dict[str, Any]:
         "candidate_pool": normalized_pool,
         "candidate_pool_source_count": len(source_items),
         "candidate_pool_count": len(normalized_pool),
+        "expanded_preferred_genres": preferred_genres,
+        "expanded_preferred_artists": preferred_artists,
+        "preference_expansion": expanded_preferences,
     }
 
 
@@ -282,6 +308,77 @@ def _load_candidate_source_items(state: RecommendationSessionState) -> list[Any]
         return load_songs(catalog_path)
 
     return []
+
+
+def _expand_preferences(
+    state: RecommendationSessionState,
+    *,
+    preference_expander: UpstagePreferenceExpanderClient | None,
+    preferred_genres: list[str],
+    preferred_artists: list[str],
+) -> PreferenceExpansionOutput:
+    if not preferred_genres and not preferred_artists:
+        return {
+            "expanded_preferred_genres": [],
+            "expanded_preferred_artists": [],
+            "genre_expansions": {},
+            "artist_expansions": {},
+        }
+
+    if preference_expander is None and os.environ.get("AI_SKIP_PREFERENCE_EXPANSION", "").strip().lower() in {"1", "true", "yes"}:
+        normalized_genres = normalize_expanded_preferences(preferred_genres)
+        normalized_artists = normalize_expanded_preferences(preferred_artists)
+        return {
+            "expanded_preferred_genres": normalized_genres,
+            "expanded_preferred_artists": normalized_artists,
+            "genre_expansions": {genre: [genre] for genre in normalized_genres},
+            "artist_expansions": {artist: [artist] for artist in normalized_artists},
+        }
+
+    expander = preference_expander or UpstagePreferenceExpanderClient()
+    try:
+        expansion = expander.expand_preferences(
+            {
+                "preferred_genres": preferred_genres,
+                "preferred_artists": preferred_artists,
+                "age": state.get("age"),
+                "preferred_year_center": state.get("preferred_year_center"),
+                "free_text": state.get("free_text", ""),
+                "context_text": state.get("context_text", ""),
+            }
+        )
+    except Exception:
+        return {
+            "expanded_preferred_genres": normalize_expanded_preferences(preferred_genres),
+            "expanded_preferred_artists": normalize_expanded_preferences(preferred_artists),
+            "genre_expansions": {genre: [genre] for genre in preferred_genres},
+            "artist_expansions": {artist: [artist] for artist in preferred_artists},
+        }
+
+    expanded_genres = normalize_expanded_preferences(expansion.get("expanded_preferred_genres", []))
+    expanded_artists = normalize_expanded_preferences(expansion.get("expanded_preferred_artists", []))
+    genre_expansions = {
+        key: normalize_expanded_preferences(value)
+        for key, value in expansion.get("genre_expansions", {}).items()
+    }
+    artist_expansions = {
+        key: normalize_expanded_preferences(value)
+        for key, value in expansion.get("artist_expansions", {}).items()
+    }
+    if not expanded_genres:
+        expanded_genres = normalize_expanded_preferences(preferred_genres)
+    if not expanded_artists:
+        expanded_artists = normalize_expanded_preferences(preferred_artists)
+    if not genre_expansions:
+        genre_expansions = {genre: [genre] for genre in preferred_genres}
+    if not artist_expansions:
+        artist_expansions = {artist: [artist] for artist in preferred_artists}
+    return {
+        "expanded_preferred_genres": expanded_genres,
+        "expanded_preferred_artists": expanded_artists,
+        "genre_expansions": genre_expansions,
+        "artist_expansions": artist_expansions,
+    }
 
 
 def _candidate_record_from_item(item: Any) -> CandidateRecord | None:

@@ -15,6 +15,12 @@ from .selection import (
     normalize_candidate_pool,
     parse_candidate_selection_output,
 )
+from .preference_expansion import (
+    PreferenceExpansionInput,
+    PreferenceExpansionOutput,
+    build_preference_expansion_messages,
+    parse_preference_expansion_output,
+)
 
 
 UPSTAGE_EMBEDDING_URL = "https://api.upstage.ai/v1/solar/embeddings"
@@ -62,6 +68,64 @@ class UpstageEmbeddingClient:
     def embed_query(self, text: str) -> list[float]:
         embeddings = self.embed_texts([text], QUERY_MODEL)
         return embeddings[0] if embeddings else []
+
+
+class UpstagePreferenceExpansionError(RecommenderError):
+    """Upstage 선호도 확장 요청이 실패했을 때 발생합니다."""
+
+
+class UpstagePreferenceExpanderClient:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str = UPSTAGE_DEFAULT_CHAT_MODEL,
+        timeout: float = 30.0,
+        urlopen_func: Callable[..., object] = urlopen,
+    ) -> None:
+        self.api_key = api_key or get_upstage_api_key()
+        self.model = model
+        self.timeout = timeout
+        self.urlopen_func = urlopen_func
+
+    def expand_preferences(self, payload: PreferenceExpansionInput) -> PreferenceExpansionOutput:
+        messages = build_preference_expansion_messages(payload)
+        body = {
+            "model": self.model,
+            "messages": [
+                {"role": message["role"], "content": message["content"]}
+                for message in messages
+            ],
+            "temperature": 0.2,
+            "top_p": 0.8,
+            "max_tokens": 2048,
+        }
+        request = Request(
+            UPSTAGE_CHAT_COMPLETIONS_URL,
+            data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with self.urlopen_func(request, timeout=self.timeout) as response:
+                response_body = json.loads(response.read().decode("utf-8"))
+        except HTTPError as error:
+            raise UpstagePreferenceExpansionError(f"Upstage API 요청이 실패했습니다: {error.code}") from error
+        except Exception as error:  # pragma: no cover - 네트워크/예상치 못한 예외 안전망
+            raise UpstagePreferenceExpansionError(f"Upstage API 요청 중 알 수 없는 오류가 발생했습니다: {error}") from error
+
+        choices = response_body.get("choices", [])
+        if not choices:
+            raise UpstagePreferenceExpansionError("Upstage 응답에서 확장 결과가 없습니다.")
+        message = choices[0].get("message", {})
+        text = message.get("content", "")
+        if isinstance(text, list):
+            text = "".join(part.get("text", "") for part in text if isinstance(part, dict))
+        if not isinstance(text, str) or not text.strip():
+            raise UpstagePreferenceExpansionError("Upstage 응답에서 텍스트를 찾지 못했습니다.")
+        return parse_preference_expansion_output(text)
 
 
 class UpstageCandidateSelectorClient:
