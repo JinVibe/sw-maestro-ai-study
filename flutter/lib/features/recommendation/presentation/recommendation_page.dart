@@ -75,9 +75,10 @@ class RecommendationPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 Expanded(
-                  child: _RecommendationStack(
-                    recommendations: state.queue,
+                  child: _RecommendationBody(
+                    state: state,
                     onSwiped: controller.react,
+                    onRetry: controller.retry,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -175,6 +176,7 @@ class RecommendationPage extends ConsumerWidget {
     BuildContext context,
     RecommendationController controller,
   ) {
+    final textController = TextEditingController();
     return showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -193,6 +195,7 @@ class RecommendationPage extends ConsumerWidget {
               const Text('이번 추천에서 어떤 점이 아쉬웠나요?'),
               const SizedBox(height: 16),
               TextField(
+                controller: textController,
                 minLines: 2,
                 maxLines: 4,
                 decoration: InputDecoration(
@@ -208,7 +211,7 @@ class RecommendationPage extends ConsumerWidget {
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: () {
-                  controller.dismissFollowUp();
+                  controller.submitFollowUp(textController.text);
                   Navigator.of(context).pop();
                 },
                 child: const Text('반영하기'),
@@ -217,6 +220,54 @@ class RecommendationPage extends ConsumerWidget {
           ),
         );
       },
+    ).whenComplete(textController.dispose);
+  }
+}
+
+/// 로딩/에러/빈 상태를 처리한 뒤 추천 카드 스택을 보여준다.
+class _RecommendationBody extends StatelessWidget {
+  const _RecommendationBody({
+    required this.state,
+    required this.onSwiped,
+    required this.onRetry,
+  });
+
+  final RecommendationState state;
+  final ValueChanged<RecommendationReaction> onSwiped;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    if (state.error != null && state.queue.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off, size: 48, color: Color(0xFF8B7666)),
+            const SizedBox(height: 12),
+            const Text('추천을 불러오지 못했어요.'),
+            const SizedBox(height: 4),
+            Text(
+              state.error!,
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Color(0xFF8B7666), fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(onPressed: onRetry, child: const Text('다시 시도')),
+          ],
+        ),
+      );
+    }
+
+    if (state.isLoading && state.queue.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return _RecommendationStack(
+      recommendations: state.queue,
+      onSwiped: onSwiped,
     );
   }
 }
