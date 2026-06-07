@@ -43,6 +43,8 @@ class Orchestrator:
     def __init__(self, recommender_fn: Callable[[dict], dict] | None = None) -> None:
         self._recommend = recommender_fn
         self._onboarding: dict[str, Any] | None = None
+        self._reaction_history: dict[str, str] = {}   # artist → last reaction (cross-bundle 상충 감지)
+        self._last_bundle_id: str | None = None        # 피드백 bundle_id 검증용
 
     def process(self, payload: dict[str, Any]) -> dict[str, Any]:
         """
@@ -88,8 +90,13 @@ class Orchestrator:
         if self._onboarding is None:
             raise RuntimeError("온보딩 정보가 없습니다. 형식 1을 먼저 입력하세요.")
 
+        # 피드백 bundle_id 검증 (세션 내 알 수 없는 번들 차단)
+        incoming_bid = bundle.get("bundle_id")
+        if self._last_bundle_id and incoming_bid != self._last_bundle_id:
+            print(f"[Orchestrator] 경고: bundle_id 불일치 — 수신 {incoming_bid}, 예상 {self._last_bundle_id}")
+
         print(f"[Orchestrator] 이상치 필터 실행 중... (곡 수: {len(bundle.get('songs', []))})")
-        filter_result = _filter_outliers(bundle)
+        filter_result = _filter_outliers(bundle, self._reaction_history)
         if filter_result["follow_up_required"]:
             print(f"[Orchestrator] 이상치 감지 — follow_up 질문 반환: {filter_result['follow_up_question']}")
             return {
@@ -97,6 +104,13 @@ class Orchestrator:
                 "follow_up_question": filter_result["follow_up_question"],
             }
         print("[Orchestrator] 이상치 없음 — 정상 피드백")
+
+        # 반응 기록 업데이트 (다음 번들 상충 감지용)
+        for song in filter_result["bundle"].get("songs", []):
+            reaction = song.get("reaction", "")
+            if reaction:
+                for artist in song.get("artists", []):
+                    self._reaction_history[artist] = reaction
 
         print("[Orchestrator] 구글시트 Feedback 저장 중...")
         _save_feedback(self._onboarding, bundle)
@@ -120,15 +134,17 @@ class Orchestrator:
         self, request: dict[str, Any], onboarding: dict[str, Any]
     ) -> dict[str, Any]:
         last_reasons: list[str] = []
+        session_id = onboarding.get("session_id", "")
         for attempt in range(MAX_RETRY + 1):
             print(f"[Orchestrator] Recommender 호출 중... (시도 {attempt + 1}/{MAX_RETRY + 1})")
             bundle = self._recommend(request)
             print(f"[Orchestrator] Recommender 응답 수신 — bundle_id: {bundle.get('bundle_id')}")
 
-            print("[Orchestrator] 번들 검증 중... (5곡, preview_url, 변형버전, 중복)")
-            result = _validate_bundle(bundle)
+            print("[Orchestrator] 번들 검증 중... (5곡, preview_url, 변형버전, 중복, 세션일치)")
+            result = _validate_bundle(bundle, session_id=session_id)
             if result["ok"]:
                 print("[Orchestrator] 번들 검증 통과")
+                self._last_bundle_id = bundle.get("bundle_id")
                 print("[Orchestrator] 구글시트 Bundle 저장 중...")
                 _save_bundle(onboarding, bundle)
                 print("[Orchestrator] Bundle 저장 완료 — 결과 반환")
@@ -157,7 +173,10 @@ def _is_bundle(payload: dict) -> bool:
 # 이상치 필터
 # ------------------------------------------------------------------ #
 
-def _filter_outliers(bundle: dict[str, Any]) -> dict[str, Any]:
+def _filter_outliers(
+    bundle: dict[str, Any],
+    reaction_history: dict[str, str] | None = None,
+) -> dict[str, Any]:
     songs = bundle.get("songs", [])
 
     # 코멘트 정제 (의미없는 텍스트 제거)
@@ -191,6 +210,21 @@ def _filter_outliers(bundle: dict[str, Any]) -> dict[str, Any]:
                 "bundle": {**bundle, "songs": cleaned_songs},
             }
 
+    # 상충 피드백 감지 — 이전 번들에서 반대 반응을 보인 아티스트
+    if reaction_history:
+        for song in cleaned_songs:
+            reaction = song.get("reaction", "")
+            if not reaction:
+                continue
+            for artist in song.get("artists", []):
+                prev = reaction_history.get(artist)
+                if prev and prev != reaction:
+                    return {
+                        "follow_up_required": True,
+                        "follow_up_question": f"'{artist}' 곡에 이전과 다른 반응을 하셨어요. 어떤 스타일의 곡을 원하시나요?",
+                        "bundle": {**bundle, "songs": cleaned_songs},
+                    }
+
     return {
         "follow_up_required": False,
         "follow_up_question": "",
@@ -212,7 +246,7 @@ def _is_meaningless(text: str) -> bool:
 # 번들 검증
 # ------------------------------------------------------------------ #
 
-def _validate_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
+def _validate_bundle(bundle: dict[str, Any], session_id: str = "") -> dict[str, Any]:
     reasons: list[str] = []
     songs: list[dict] = bundle.get("songs", [])
 
@@ -228,6 +262,11 @@ def _validate_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
             reasons.append(f"preview_url 없음: {song.get('title', song.get('song_id'))}")
         if _VARIANT_PATTERN.search(song.get("title", "")):
             reasons.append(f"변형 버전 포함: {song.get('title')}")
+
+    # 세션 일치 검증 (Recommender가 session_id를 응답에 포함한 경우)
+    bundle_session = bundle.get("session_id", "")
+    if session_id and bundle_session and bundle_session != session_id:
+        reasons.append(f"세션 불일치: {bundle_session} (기대값 {session_id})")
 
     return {"ok": len(reasons) == 0, "reasons": reasons}
 
