@@ -2,6 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sw_maestro_ai_study_frontend/app/app.dart';
+import 'package:sw_maestro_ai_study_frontend/features/recommendation/data/recommendation_api_client.dart';
+import 'package:sw_maestro_ai_study_frontend/features/recommendation/domain/music_recommendation.dart';
+import 'package:sw_maestro_ai_study_frontend/features/recommendation/presentation/recommendation_controller.dart';
 
 void main() {
   testWidgets('renders recommendation home', (WidgetTester tester) async {
@@ -12,7 +15,12 @@ void main() {
     });
 
     await tester.pumpWidget(
-      const ProviderScope(child: MaestroMusicApp()),
+      ProviderScope(
+        overrides: [
+          recommendationApiClientProvider.overrideWithValue(_FakeApiClient()),
+        ],
+        child: const MaestroMusicApp(),
+      ),
     );
 
     await tester.pumpAndSettle();
@@ -23,4 +31,40 @@ void main() {
     expect(find.text('보관'), findsNothing);
     expect(find.text('글쎄요'), findsOneWidget);
   });
+}
+
+class _FakeApiClient extends RecommendationApiClient {
+  _FakeApiClient() : super(baseUrl: 'http://localhost');
+
+  @override
+  Future<SessionDto> createSession({
+    required int age,
+    required List<String> preferredGenres,
+    required List<String> preferredArtists,
+  }) async {
+    return const SessionDto(sessionId: 'sess_test');
+  }
+
+  @override
+  Future<BundleDto> recommend({
+    required String sessionId,
+    required String freeText,
+    String followUpText = '',
+  }) async {
+    return BundleDto(
+      bundleId: 'bundle_test',
+      emotionTitle: '테스트 추천 묶음',
+      songs: [
+        MusicRecommendation(
+          id: 'song_test',
+          title: '테스트 곡',
+          artist: '테스트 아티스트',
+          albumArtUrl: '',
+          contextLabel: 'AI 추천',
+          previewDescription: '테스트 추천 이유',
+          externalUrl: Uri.parse('https://music.apple.com/'),
+        ),
+      ],
+    );
+  }
 }
