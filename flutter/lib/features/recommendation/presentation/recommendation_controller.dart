@@ -19,27 +19,34 @@ final recommendationControllerProvider =
 class RecommendationState {
   const RecommendationState({
     required this.queue,
+    required this.allRecommendations,
     this.unsureStreak = 0,
     this.savedIds = const {},
     this.lastReaction,
   });
 
   final List<MusicRecommendation> queue;
+  final List<MusicRecommendation> allRecommendations;
   final int unsureStreak;
   final Set<String> savedIds;
   final RecommendationReaction? lastReaction;
 
   MusicRecommendation? get current => queue.isEmpty ? null : queue.first;
+  List<MusicRecommendation> get savedRecommendations => allRecommendations
+      .where((recommendation) => savedIds.contains(recommendation.id))
+      .toList();
   bool get shouldAskFollowUp => unsureStreak >= 3;
 
   RecommendationState copyWith({
     List<MusicRecommendation>? queue,
+    List<MusicRecommendation>? allRecommendations,
     int? unsureStreak,
     Set<String>? savedIds,
     RecommendationReaction? lastReaction,
   }) {
     return RecommendationState(
       queue: queue ?? this.queue,
+      allRecommendations: allRecommendations ?? this.allRecommendations,
       unsureStreak: unsureStreak ?? this.unsureStreak,
       savedIds: savedIds ?? this.savedIds,
       lastReaction: lastReaction ?? this.lastReaction,
@@ -49,7 +56,12 @@ class RecommendationState {
 
 class RecommendationController extends StateNotifier<RecommendationState> {
   RecommendationController(List<MusicRecommendation> initialQueue)
-      : super(RecommendationState(queue: initialQueue));
+      : super(
+          RecommendationState(
+            queue: initialQueue,
+            allRecommendations: initialQueue,
+          ),
+        );
 
   void react(RecommendationReaction reaction) {
     final current = state.current;
@@ -59,7 +71,7 @@ class RecommendationController extends StateNotifier<RecommendationState> {
 
     final nextQueue = state.queue.skip(1).toList();
     final nextSavedIds = {...state.savedIds};
-    if (reaction == RecommendationReaction.save) {
+    if (reaction == RecommendationReaction.like) {
       nextSavedIds.add(current.id);
     }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/preferences/app_settings.dart';
 import '../domain/music_recommendation.dart';
 import 'recommendation_controller.dart';
 import 'widgets/music_card.dart';
@@ -13,6 +14,8 @@ class RecommendationPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(recommendationControllerProvider);
     final controller = ref.read(recommendationControllerProvider.notifier);
+    final settings = ref.watch(appSettingsControllerProvider);
+    final settingsController = ref.read(appSettingsControllerProvider.notifier);
 
     ref.listen(recommendationControllerProvider, (previous, next) {
       if (next.shouldAskFollowUp && previous?.shouldAskFollowUp != true) {
@@ -21,41 +24,150 @@ class RecommendationPage extends ConsumerWidget {
     });
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('오늘의 추천'),
+        title: const Text('오늘의 음악 추천'),
         actions: [
-          IconButton(
-            tooltip: '보관함',
-            onPressed: () {},
-            icon: const Icon(Icons.bookmarks_outlined),
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: IconButton(
+              tooltip: '보관함',
+              onPressed: () =>
+                  _showSavedSheet(context, state.savedRecommendations),
+              icon: const Icon(Icons.bookmarks_outlined),
+            ),
           ),
         ],
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                '최근 취향과 분위기에 맞춰 고른 음악입니다.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF6E6E73),
-                    ),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: _RecommendationStack(
-                  recommendations: state.queue,
-                  onSwiped: controller.react,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ReactionBar(onReact: controller.react),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFF1D5B8),
+              Color(0xFFF7E8D3),
+              Color(0xFFFFF8ED),
             ],
           ),
         ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _WarmHeader(
+                  reminderLabel: settings.reminderLabel,
+                  onReminderTap: () => _pickReminderTime(
+                    context,
+                    settings.reminderHour,
+                    settings.reminderMinute,
+                    settingsController,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  '하루가 느슨해지는 시간에 맞춰, 오늘의 분위기와 어울리는 곡을 골랐어요.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF8B7666),
+                      ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: _RecommendationStack(
+                    recommendations: state.queue,
+                    onSwiped: controller.react,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ReactionBar(onReact: controller.react),
+              ],
+            ),
+          ),
+        ),
       ),
+    );
+  }
+
+  Future<void> _pickReminderTime(
+    BuildContext context,
+    int initialHour,
+    int initialMinute,
+    AppSettingsController controller,
+  ) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: initialHour, minute: initialMinute),
+      helpText: '알림 받을 시간',
+      cancelText: '취소',
+      confirmText: '저장',
+    );
+
+    if (picked == null) {
+      return;
+    }
+
+    await controller.updateReminderTime(
+      hour: picked.hour,
+      minute: picked.minute,
+    );
+  }
+
+  Future<void> _showSavedSheet(
+    BuildContext context,
+    List<MusicRecommendation> savedRecommendations,
+  ) {
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '저장한 노래',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              if (savedRecommendations.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Text('아직 저장한 노래가 없습니다. 좋아요를 누르면 여기에 모여요.'),
+                )
+              else
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: savedRecommendations.length,
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final recommendation = savedRecommendations[index];
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.network(
+                            recommendation.albumArtUrl,
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        title: Text(recommendation.title),
+                        subtitle: Text(recommendation.artist),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -86,9 +198,9 @@ class RecommendationPage extends ConsumerWidget {
                 decoration: InputDecoration(
                   hintText: '분위기, 장르, 템포, 좋아하는 아티스트 등',
                   filled: true,
-                  fillColor: const Color(0xFFF5F5F7),
+                  fillColor: const Color(0xFFFFF8ED),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(18),
                     borderSide: BorderSide.none,
                   ),
                 ),
@@ -105,6 +217,58 @@ class RecommendationPage extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _WarmHeader extends StatelessWidget {
+  const _WarmHeader({
+    required this.reminderLabel,
+    required this.onReminderTap,
+  });
+
+  final String reminderLabel;
+  final VoidCallback onReminderTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Text(
+            '저녁의\n플레이리스트',
+            style: Theme.of(context).textTheme.headlineLarge,
+          ),
+        ),
+        InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onReminderTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFBF4).withValues(alpha: 0.74),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE8CFB5)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.notifications_none, size: 18),
+                const SizedBox(width: 6),
+                Text(
+                  reminderLabel,
+                  style: const TextStyle(
+                    color: Color(0xFF6E594A),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

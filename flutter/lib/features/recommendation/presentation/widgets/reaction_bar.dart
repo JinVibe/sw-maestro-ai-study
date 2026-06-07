@@ -12,9 +12,16 @@ class ReactionBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5E5EA)),
+        color: const Color(0xFFFFFBF4).withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE8CFB5)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF8A5D3B).withValues(alpha: 0.10),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -22,15 +29,7 @@ class ReactionBar extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: () => onReact(RecommendationReaction.unsure),
               icon: const Icon(Icons.help_outline),
-              label: const Text('잘 모르겠어요'),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => onReact(RecommendationReaction.save),
-              icon: const Icon(Icons.bookmark_add_outlined),
-              label: const Text('보관'),
+              label: const Text('글쎄요'),
             ),
           ),
           const SizedBox(width: 8),

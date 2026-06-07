@@ -38,43 +38,54 @@ class NotificationService {
     await _requestPlatformPermissions();
   }
 
-  Future<void> scheduleDailyRecommendationReminder() async {
+  Future<void> scheduleDailyRecommendationReminder({
+    int hour = 19,
+    int minute = 0,
+  }) async {
     if (kIsWeb) {
       return;
     }
 
-    await _notifications.zonedSchedule(
-      id: _dailyReminderId,
-      title: '오늘 들을 음악을 골라봤어요',
-      body: '저녁 7시에 맞춘 추천곡을 확인해 보세요.',
-      scheduledDate: _nextSevenPm(),
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channelId,
-          _channelName,
-          channelDescription: _channelDescription,
-          importance: Importance.high,
-          priority: Priority.high,
+    try {
+      await _notifications.zonedSchedule(
+        id: _dailyReminderId,
+        title: '오늘 들을 음악을 골라봤어요',
+        body: '원하는 시간에 맞춰 준비한 추천곡을 확인해 보세요.',
+        scheduledDate: _nextReminderTime(hour: hour, minute: minute),
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _channelId,
+            _channelName,
+            channelDescription: _channelDescription,
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
         ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      ),
-      matchDateTimeComponents: DateTimeComponents.time,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-    );
+        matchDateTimeComponents: DateTimeComponents.time,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+    } catch (_) {
+      return;
+    }
   }
 
-  tz.TZDateTime _nextSevenPm() {
+  tz.TZDateTime _nextReminderTime({
+    required int hour,
+    required int minute,
+  }) {
     final now = tz.TZDateTime.now(tz.local);
     var scheduled = tz.TZDateTime(
       tz.local,
       now.year,
       now.month,
       now.day,
-      19,
+      hour,
+      minute,
     );
 
     if (scheduled.isBefore(now)) {

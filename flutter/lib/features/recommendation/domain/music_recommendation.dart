@@ -20,6 +20,5 @@ class MusicRecommendation {
 
 enum RecommendationReaction {
   like,
-  save,
   unsure,
 }

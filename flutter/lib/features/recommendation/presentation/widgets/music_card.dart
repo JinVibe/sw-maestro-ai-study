@@ -17,7 +17,7 @@ class MusicCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final card = ClipRRect(
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(30),
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -37,8 +37,8 @@ class MusicCard extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.transparent,
-                  Color(0xCC111111),
+                  Color(0x111B120C),
+                  Color(0xAA2F2018),
                 ],
               ),
             ),
@@ -54,7 +54,8 @@ class MusicCard extends StatelessWidget {
                 Text(
                   recommendation.contextLabel,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.82),
+                        color: const Color(0xFFFFEFD7),
+                        fontWeight: FontWeight.w700,
                       ),
                 ),
                 const SizedBox(height: 8),
@@ -130,8 +131,9 @@ class _PreviewControlState extends State<_PreviewControl> {
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.48),
-        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFFFFFBF4).withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
       ),
       child: Row(
         children: [
@@ -139,14 +141,17 @@ class _PreviewControlState extends State<_PreviewControl> {
             tooltip: isPlaying ? '미리듣기 일시정지' : '미리듣기 재생',
             onPressed: () => setState(() => isPlaying = !isPlaying),
             icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
-            color: Colors.white,
+            color: const Color(0xFFFFF7EA),
           ),
           Expanded(
             child: Text(
               widget.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(
+                color: Color(0xFFFFF7EA),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
