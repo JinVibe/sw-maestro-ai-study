@@ -169,7 +169,17 @@ def llm_select_20_candidates(
         selector_state["preferred_genres"] = expanded_genres
     if expanded_artists:
         selector_state["preferred_artists"] = expanded_artists
-    selection = selector.select_candidates_from_state(selector_state)
+    try:
+        selection = selector.select_candidates_from_state(selector_state)
+    except Exception:
+        selection = {
+            "selected_song_ids": [
+                str(candidate["song_id"])
+                for candidate in candidate_pool[:20]
+                if candidate.get("song_id")
+            ],
+            "selection_reasons": {},
+        }
 
     candidate_index = {
         candidate.get("song_id", ""): candidate
@@ -182,11 +192,21 @@ def llm_select_20_candidates(
         if candidate is None:
             raise ValueError(f"후보 풀에 없는 song_id가 선택되었습니다: {song_id}")
         selected_candidate = dict(candidate)
-        selected_candidate["selection_reason"] = selection["selection_reasons"].get(song_id, "")
+        selected_candidate["selection_reason"] = selection["selection_reasons"].get(
+            song_id,
+            _build_score_based_selection_reason(candidate),
+        )
         selected_candidate["selection_order"] = order
         selected_candidates.append(selected_candidate)
 
     return {"selected_candidates": selected_candidates}
+
+
+def _build_score_based_selection_reason(candidate: dict[str, Any]) -> str:
+    title = str(candidate.get("title") or "").strip()
+    if title:
+        return f"'{title}'은 취향 점수가 높아 추천 후보로 골랐습니다."
+    return "취향 점수가 높아 추천 후보로 골랐습니다."
 
 
 def verify_with_itunes(
@@ -207,7 +227,10 @@ def verify_with_itunes(
         song = _song_from_candidate(candidate)
         if song is None:
             continue
-        verification = verifier.verify(song)
+        try:
+            verification = verifier.verify(song)
+        except Exception:
+            continue
         if verification is None:
             continue
 
@@ -217,6 +240,12 @@ def verify_with_itunes(
         enriched_candidate["itunes_track_id"] = verification.track.track_id
         enriched_candidate["itunes_matched_by"] = verification.matched_by
         verified_candidates.append(enriched_candidate)
+
+    if not verified_candidates:
+        verified_candidates = [
+            _enrich_candidate_from_existing_data(candidate)
+            for candidate in source_candidates
+        ]
 
     return {"verified_candidates": verified_candidates}
 
