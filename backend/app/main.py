@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import Settings
 from app.orchestrator_service import OrchestratorService
@@ -21,6 +22,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="향수곡 추천 백엔드", version="0.2.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(sessions.router)
 app.include_router(recommendations.router)
