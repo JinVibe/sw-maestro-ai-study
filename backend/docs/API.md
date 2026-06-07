@@ -1,0 +1,263 @@
+# 백엔드 API 문서
+
+향수곡 추천 서비스 백엔드(FastAPI)의 전체 엔드포인트 / 요청 / 응답 / 스키마 명세.
+
+- Base URL (로컬): `http://127.0.0.1:8000`
+- 모든 본문은 `application/json` (UTF-8, 한글 그대로).
+- 대화형 문서: `GET /docs` (Swagger), `GET /redoc`
+
+## 흐름 요약
+
+```text
+1) POST /sessions        온보딩 → session_id 발급
+2) POST /recommendations free_text → 5곡 번들
+3) 사용자가 곡마다 좋아요/싫어요
+4) POST /feedbacks       반응 전송 → next_action 결정
+   - next_action=recommend_next_bundle → 2)로 반복(추천된 곡은 자동 제외)
+   - next_action=request_follow_up_text → 꼬리 질문 후 free_text/follow_up_text로 재요청
+5) GET /sessions/{id}/library  저장(saved)한 곡 목록
+```
+
+세션 상태(`exclude_song_ids`, `negative_count`, `next_action`, 선호 정보)는 백엔드가 서버 메모리에 보관한다. 클라이언트는 `session_id`만 들고 다니면 된다.
+
+---
+
+## 1. POST /sessions — 온보딩
+
+세션을 만든다. `preferred_year_center`는 받지 않는다(추천 모듈이 `age`로 계산).
+
+### Request `CreateSessionRequest`
+
+| 필드 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| `age` | int (1–120) | ✅ | 나이 |
+| `preferred_genres` | string[] | | 선호 장르 |
+| `preferred_artists` | string[] | | 선호 아티스트 |
+| `user_id` | string | | 회원 식별자(비회원은 빈 값) |
+
+```json
+{
+  "age": 36,
+  "preferred_genres": ["발라드"],
+  "preferred_artists": ["조성모"],
+  "user_id": ""
+}
+```
+
+### Response 200 `SessionResponse`
+
+```json
+{
+  "session_id": "sess_0a1b2c3d4e5f",
+  "user_id": "",
+  "age": 36,
+  "preferred_genres": ["발라드"],
+  "preferred_artists": ["조성모"],
+  "next_action": "recommend_next_bundle"
+}
+```
+
+---
+
+## 2. POST /recommendations — 추천
+
+세션 정보 + 현재 테마(`free_text`)로 5곡 번들을 만든다.
+내부 파이프라인: `ingest → 후보풀 → LLM 20곡 선별 → iTunes 검증 → 최종 5곡`.
+
+### Request `RecommendRequest`
+
+| 필드 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| `session_id` | string | ✅ | `/sessions`에서 받은 값 |
+| `free_text` | string (≥1) | ✅ | 현재 듣고 싶은 느낌/상황 |
+| `follow_up_text` | string | | 꼬리 질문에 대한 사용자 답변(있을 때) |
+
+```json
+{
+  "session_id": "sess_0a1b2c3d4e5f",
+  "free_text": "밤에 산책할 때 듣고 싶어요",
+  "follow_up_text": ""
+}
+```
+
+### Response 200 `BundleResponse`
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `bundle_id` | string | 번들 식별자(피드백 때 다시 보냄) |
+| `emotion_title` | string | 감성 타이틀 |
+| `songs` | `RecommendedSong[]` | 추천 곡(보통 5곡) |
+| `next_action` | string | `collect_feedback` |
+
+`RecommendedSong`:
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `song_id` | string | 곡 ID |
+| `title` | string | 곡명 |
+| `artists` | string[] | 아티스트명 |
+| `album` | string | 앨범명 |
+| `album_art_url` | string | 앨범 아트(iTunes, 검증 스킵 시 빈 값) |
+| `preview_url` | string | 30초 미리듣기(iTunes, 검증 스킵 시 빈 값) |
+| `slot_type` | string | `anchor` / `discovery` 등 |
+| `reason` | string | 추천 사유 |
+
+```json
+{
+  "bundle_id": "bundle_ceaa556bb5d6",
+  "emotion_title": "밤에 산책할 때 듣고 싶어요에 어울리는 추천 묶음",
+  "songs": [
+    {
+      "song_id": "3849494",
+      "title": "이등병의 편지",
+      "artists": ["김광석"],
+      "album": "김광석 '나의 노래' Box Set",
+      "album_art_url": "https://.../100x100bb.jpg",
+      "preview_url": "https://.../preview.m4a",
+      "slot_type": "anchor",
+      "reason": "입력한 '밤에 산책할 때 듣고 싶어요'와 분위기가 가까운 곡입니다."
+    }
+  ],
+  "next_action": "collect_feedback"
+}
+```
+
+### 오류
+
+| 코드 | 상황 |
+| --- | --- |
+| 404 | `session_id` 없음 |
+| 422 | 후보 부족/입력 오류(`free_text` 비었음 등) |
+
+---
+
+## 3. POST /feedbacks — 피드백
+
+곡별 반응을 보내 다음 행동을 결정한다.
+
+### Request `FeedbackRequest`
+
+| 필드 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| `session_id` | string | ✅ | 세션 |
+| `bundle_id` | string | | 피드백 대상 번들(생략 시 마지막 번들) |
+| `feedbacks` | `FeedbackItem[]` | ✅ | 곡별 반응 |
+
+`FeedbackItem`:
+
+| 필드 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| `song_id` | string | ✅ | 곡 ID |
+| `title` | string | | 곡명(선택) |
+| `artists` | string[] | | 아티스트(선택) |
+| `reaction` | `"좋아요"` \| `"싫어요"` | ✅ | 반응 |
+| `comment` | string | | 한마디(선택) |
+| `saved` | bool | | 보관함 저장 여부 |
+
+```json
+{
+  "session_id": "sess_0a1b2c3d4e5f",
+  "bundle_id": "bundle_ceaa556bb5d6",
+  "feedbacks": [
+    { "song_id": "3849494", "reaction": "좋아요", "saved": true },
+    { "song_id": "708211", "reaction": "싫어요" }
+  ]
+}
+```
+
+### Response 200 `FeedbackResponse`
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `negative_count` | int | 이번 번들 싫어요 수 |
+| `next_action` | string | 아래 표 참고 |
+
+`next_action` 값:
+
+| 값 | 의미 |
+| --- | --- |
+| `recommend_next_bundle` | 바로 다음 추천 가능 |
+| `request_follow_up_text` | 싫어요 3회 이상 → 꼬리 질문 필요 |
+| `finish` | 종료 |
+
+```json
+{ "negative_count": 1, "next_action": "recommend_next_bundle" }
+```
+
+부수효과: `reaction`을 준 곡은 `exclude_song_ids`에 누적되어 다음 추천에서 제외된다. `saved=true` 곡은 보관함에 들어간다.
+
+### 오류
+
+| 코드 | 상황 |
+| --- | --- |
+| 404 | `session_id` 없음 |
+| 422 | 정리할 피드백이 없음 / 잘못된 `reaction` |
+
+---
+
+## 4. GET /sessions/{session_id}/library — 보관함
+
+`saved=true`로 저장한 곡 목록.
+
+### Response 200 `LibraryResponse`
+
+```json
+{
+  "session_id": "sess_0a1b2c3d4e5f",
+  "songs": [
+    {
+      "song_id": "3849494",
+      "title": "이등병의 편지",
+      "artists": ["김광석"],
+      "album": "김광석 '나의 노래' Box Set",
+      "album_art_url": "https://.../100x100bb.jpg",
+      "preview_url": "https://.../preview.m4a",
+      "slot_type": "anchor",
+      "reason": "..."
+    }
+  ]
+}
+```
+
+### 오류
+
+| 코드 | 상황 |
+| --- | --- |
+| 404 | `session_id` 없음 |
+
+---
+
+## 5. GET /health
+
+```json
+{ "status": "ok" }
+```
+
+---
+
+## 부록: 환경 변수
+
+| 변수 | 기본 | 설명 |
+| --- | --- | --- |
+| `CATALOG_PATH` | `ai/data/samples/melon_kpop_sample.jsonl` | 후보 카탈로그 경로 |
+| `UPSTAGE_API_KEY` | (없음) | 실제 추천(LLM 후보 선별)에 필요 |
+| `AI_SKIP_ITUNES_VERIFICATION` | `0` | `1`이면 iTunes 검증 스킵(키/네트워크 불필요) |
+| `AI_SKIP_PREFERENCE_EXPANSION` | `0` | `1`이면 선호 확장 LLM 호출 스킵 |
+
+## 부록: curl 예시
+
+```bash
+BASE=http://127.0.0.1:8000
+
+SID=$(curl -s $BASE/sessions -H 'Content-Type: application/json' \
+  -d '{"age":36,"preferred_genres":["발라드"],"preferred_artists":["조성모"]}' \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['session_id'])")
+
+curl -s $BASE/recommendations -H 'Content-Type: application/json' \
+  -d "{\"session_id\":\"$SID\",\"free_text\":\"밤에 산책할 때 듣고 싶어요\"}"
+
+curl -s $BASE/feedbacks -H 'Content-Type: application/json' \
+  -d "{\"session_id\":\"$SID\",\"feedbacks\":[{\"song_id\":\"3849494\",\"reaction\":\"좋아요\",\"saved\":true}]}"
+
+curl -s $BASE/sessions/$SID/library
+```

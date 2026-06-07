@@ -1,0 +1,18 @@
+# 실행: backend/ 에서  docker compose up --build
+# (build context를 repo 루트(..)로 잡아 ai/ 와 backend/ 를 함께 복사한다)
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    image: soma-backend:latest
+    ports:
+      - "8000:8000"
+    environment:
+      CATALOG_PATH: ai/data/samples/melon_kpop_sample.jsonl
+      # 실제 추천(LLM 후보 선별)에 필요. 호스트 환경변수 또는 .env에서 주입.
+      UPSTAGE_API_KEY: ${UPSTAGE_API_KEY:-}
+      # 키/네트워크 없이 띄우려면 1 로(검증/선호확장 스킵).
+      AI_SKIP_ITUNES_VERIFICATION: ${AI_SKIP_ITUNES_VERIFICATION:-0}
+      AI_SKIP_PREFERENCE_EXPANSION: ${AI_SKIP_PREFERENCE_EXPANSION:-0}
+    restart: unless-stopped

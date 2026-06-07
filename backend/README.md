@@ -55,6 +55,30 @@ PYTHONPATH=backend:. AI_SKIP_ITUNES_VERIFICATION=1 AI_SKIP_PREFERENCE_EXPANSION=
 > LLM 후보 선별(`llm_select_20_candidates`)이 Upstage Solar를 호출한다.
 > 키/네트워크 없이 구동하려면 위 두 `AI_SKIP_*` 환경변수를 켠다(검증/선호확장 건너뜀).
 
+## Docker 배포
+
+빌드 컨텍스트는 **repo 루트**다(`ai/` 와 `backend/` 둘 다 필요).
+
+```bash
+# repo 루트에서:
+docker build -f backend/Dockerfile -t soma-backend .
+docker run --rm -p 8000:8000 \
+  -e UPSTAGE_API_KEY=$UPSTAGE_API_KEY \
+  soma-backend
+```
+
+docker compose 사용:
+
+```bash
+cd backend
+UPSTAGE_API_KEY=... docker compose up --build
+# 키 없이 띄워보기(검증/선호확장 스킵):
+AI_SKIP_ITUNES_VERIFICATION=1 AI_SKIP_PREFERENCE_EXPANSION=1 docker compose up --build
+```
+
+- 헬스체크: `GET /health`
+- API 전체 명세: [docs/API.md](docs/API.md)
+
 ## 테스트
 
 ```bash
