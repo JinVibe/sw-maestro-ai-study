@@ -3,9 +3,11 @@ from __future__ import annotations
 import os
 import re
 from datetime import date
-from typing import Any, Callable, TypedDict
+from typing import TYPE_CHECKING, Any, Callable, TypedDict
 
-from ..orchestrator.state import NextAction, RecommendationSessionState
+if TYPE_CHECKING:
+    # 런타임 import 시 orchestrator <-> recommender 순환을 피하기 위해 타입 체크 전용으로 둔다.
+    from ..orchestrator.state import NextAction, RecommendationSessionState
 from .catalog import load_songs
 from .era import preferred_year_center_from_age, release_year
 from .feedback import count_negative_feedbacks
@@ -46,7 +48,7 @@ class CandidateRecord(TypedDict, total=False):
 
 
 CandidateSelector = Callable[
-    [RecommendationSessionState, list[CandidateRecord], int],
+    ["RecommendationSessionState", list[CandidateRecord], int],
     list[CandidateRecord],
 ]
 
