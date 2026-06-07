@@ -26,7 +26,7 @@ class RecommendationPage extends ConsumerWidget {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('오늘의 음악 추천'),
+        title: const Text('Oh my memory'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 10),
@@ -286,7 +286,7 @@ class _RecommendationStack extends StatelessWidget {
   Widget build(BuildContext context) {
     if (recommendations.isEmpty) {
       return const Center(
-        child: Text('추천이 모두 끝났습니다. 잠시 후 다시 확인해 주세요.'),
+        child: Text('내일 다시 만나요!'),
       );
     }
 

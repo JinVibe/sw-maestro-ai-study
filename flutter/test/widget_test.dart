@@ -17,7 +17,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('오늘의 음악 추천'), findsOneWidget);
+    expect(find.text('Oh my memory'), findsOneWidget);
     expect(find.text('저녁의\n플레이리스트'), findsOneWidget);
     expect(find.text('좋아요'), findsOneWidget);
     expect(find.text('보관'), findsNothing);

@@ -14,7 +14,7 @@ class MaestroMusicApp extends ConsumerWidget {
     final settings = ref.watch(appSettingsControllerProvider);
 
     return MaterialApp(
-      title: '오늘의 음악 추천',
+      title: 'Oh my memory',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       home: !settings.isLoaded

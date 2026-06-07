@@ -1,6 +1,6 @@
 {
-    "name": "오늘의 음악 추천",
-    "short_name": "음악 추천",
+    "name": "Oh my memory",
+    "short_name": "Memory",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

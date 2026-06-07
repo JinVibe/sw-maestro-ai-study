@@ -104,8 +104,8 @@ class MusicCard extends StatelessWidget {
       direction: DismissDirection.horizontal,
       onDismissed: (direction) {
         final reaction = direction == DismissDirection.endToStart
-            ? RecommendationReaction.unsure
-            : RecommendationReaction.like;
+            ? RecommendationReaction.like
+            : RecommendationReaction.unsure;
         onDismissed(reaction);
       },
       child: card,
