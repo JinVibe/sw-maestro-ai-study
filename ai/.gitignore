@@ -3,6 +3,7 @@ data/raw/*
 data/embeddings/*
 !data/embeddings/.gitkeep
 .env
+credentials/
 __pycache__/
 *.pyc
 *.partial
