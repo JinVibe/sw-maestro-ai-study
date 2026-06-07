@@ -1,0 +1,99 @@
+from __future__ import annotations
+
+import uuid
+from pathlib import Path
+from typing import Any, Callable
+
+from ai.recommender.catalog import load_songs
+from ai.recommender.upstage_client import (
+    UpstageCandidateSelectorClient,
+    UpstagePreferenceExpanderClient,
+)
+# 추천 파이프라인은 orchestrator 노드 경유로 호출한다(엔진 직접 import 시 순환 발생).
+from ai.orchestrator.nodes import (
+    build_candidate_pool,
+    collect_feedback,
+    decide_next_action,
+    ingest_context,
+    llm_select_20_candidates,
+    select_final_5,
+    verify_with_itunes,
+)
+
+# 응답 곡 dict에 노출할 필드(계약서 3-3 기준).
+_SONG_FIELDS = (
+    "song_id",
+    "title",
+    "artists",
+    "album",
+    "album_art_url",
+    "preview_url",
+    "slot_type",
+    "reason",
+)
+
+
+class OrchestratorService:
+    """오케스트레이터 추천 파이프라인을 구동하는 백엔드 서비스.
+
+    계약서(orchestrator-recommender-contract.md)의 흐름을 HTTP 요청/응답 단위로 나눠 실행한다.
+      - recommend():  ingest -> build_pool -> llm_select -> verify -> select_final_5 -> 번들 조립
+      - apply_feedback(): collect_feedback -> decide_next_action
+
+    LLM/iTunes 클라이언트는 주입 가능하다(운영=Upstage/iTunes, 테스트=가짜).
+    """
+
+    def __init__(
+        self,
+        catalog_path: Path,
+        *,
+        selector_factory: Callable[[], Any] = UpstageCandidateSelectorClient,
+        expander_factory: Callable[[], Any] | None = UpstagePreferenceExpanderClient,
+        verifier: Any | None = None,
+    ) -> None:
+        # 카탈로그(후보 소스)는 서버 시작 시 1회 로드해 재사용한다.
+        self.catalog = load_songs(catalog_path)
+        self._selector_factory = selector_factory
+        self._expander_factory = expander_factory
+        self._verifier = verifier
+
+    def recommend(self, state: dict[str, Any]) -> dict[str, Any]:
+        """1회 추천 턴: 세션 상태 -> 5곡 번들 dict."""
+        state = dict(state)
+        state.setdefault("candidate_source", self.catalog)
+
+        state.update(ingest_context(state))
+        expander = self._expander_factory() if self._expander_factory else None
+        state.update(build_candidate_pool(state, preference_expander=expander))
+        state.update(llm_select_20_candidates(state, selector=self._selector_factory()))
+        state.update(verify_with_itunes(state, verifier=self._verifier))
+        state.update(select_final_5(state))
+
+        return self._assemble_bundle(state)
+
+    def apply_feedback(self, state: dict[str, Any]) -> dict[str, Any]:
+        """피드백 턴: 제외 목록/싫어요 수/다음 액션 갱신값을 돌려준다."""
+        state = dict(state)
+        updates: dict[str, Any] = {}
+        updates.update(collect_feedback(state))
+        merged = {**state, **updates}
+        updates.update(decide_next_action(merged))
+        return updates
+
+    @staticmethod
+    def _assemble_bundle(state: dict[str, Any]) -> dict[str, Any]:
+        final_bundle = state.get("final_bundle") or []
+        songs = []
+        for candidate in final_bundle:
+            song = {field: candidate.get(field, "") for field in _SONG_FIELDS}
+            if not isinstance(song.get("artists"), list):
+                song["artists"] = []
+            songs.append(song)
+        free_text = str(state.get("free_text") or "").strip()
+        emotion_title = f"{free_text}에 어울리는 추천 묶음" if free_text else "추천 묶음"
+        return {
+            "bundle_id": f"bundle_{uuid.uuid4().hex[:12]}",
+            "emotion_title": emotion_title,
+            "songs": songs,
+            "next_action": state.get("next_action", "collect_feedback"),
+        }
