@@ -1,0 +1,21 @@
+# Dart / Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+coverage/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Local env
+.env
+*.log
+
+# Platform generated files can be recreated by Flutter tooling.
+android/.gradle/
+ios/Pods/
+macos/Pods/
