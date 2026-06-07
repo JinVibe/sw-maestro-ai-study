@@ -27,6 +27,20 @@ class AppSettingsState {
   final int reminderHour;
   final int reminderMinute;
 
+  int get age {
+    final match = RegExp(r'\d+').firstMatch(ageGroup);
+    final decade = int.tryParse(match?.group(0) ?? '') ?? 20;
+    return decade >= 50 ? 55 : decade + 5;
+  }
+
+  List<String> get favoriteArtistList {
+    return favoriteArtists
+        .split(RegExp(r'[,，/]'))
+        .map((artist) => artist.trim())
+        .where((artist) => artist.isNotEmpty)
+        .toList();
+  }
+
   String get reminderLabel {
     final period = reminderHour < 12 ? '오전' : '오후';
     final hour = reminderHour % 12 == 0 ? 12 : reminderHour % 12;
