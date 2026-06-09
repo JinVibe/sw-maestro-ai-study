@@ -89,11 +89,9 @@ class OrchestratorService:
             if not isinstance(song.get("artists"), list):
                 song["artists"] = []
             songs.append(song)
-        free_text = str(state.get("free_text") or "").strip()
-        emotion_title = f"{free_text}에 어울리는 추천 묶음" if free_text else "추천 묶음"
         return {
-            "bundle_id": f"bundle_{uuid.uuid4().hex[:12]}",
-            "emotion_title": emotion_title,
+            "bundle_id": state.get("bundle_id") or f"bundle_{uuid.uuid4().hex[:12]}",
+            "emotion_title": state.get("emotion_title") or "오늘의 추천 묶음",
             "songs": songs,
             "next_action": state.get("next_action", "collect_feedback"),
         }

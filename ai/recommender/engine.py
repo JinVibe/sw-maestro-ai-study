@@ -6,8 +6,7 @@ from datetime import date
 from typing import TYPE_CHECKING, Any, Callable, TypedDict
 
 if TYPE_CHECKING:
-    # 런타임 import 시 orchestrator <-> recommender 순환을 피하기 위해 타입 체크 전용으로 둔다.
-    from ..orchestrator.state import NextAction, RecommendationSessionState
+    from ..orchestrator.state import RecommendationSessionState
 from .catalog import load_songs
 from .era import preferred_year_center_from_age, release_year
 from .feedback import count_negative_feedbacks
@@ -48,7 +47,7 @@ class CandidateRecord(TypedDict, total=False):
 
 
 CandidateSelector = Callable[
-    ["RecommendationSessionState", list[CandidateRecord], int],
+    [Any, list[CandidateRecord], int],
     list[CandidateRecord],
 ]
 
@@ -161,6 +160,15 @@ def llm_select_20_candidates(
     if not candidate_pool:
         raise ValueError("candidate_pool이 비어 있어 LLM 후보 선택을 실행할 수 없습니다.")
 
+    if selector is None and os.environ.get("AI_SKIP_LLM_SELECTION", "").strip().lower() in {"1", "true", "yes"}:
+        top = candidate_pool[:20]
+        return {
+            "selected_candidates": [
+                {**c, "selection_reason": "우선순위 점수 기반 자동 선택", "selection_order": i}
+                for i, c in enumerate(top, start=1)
+            ]
+        }
+
     selector = selector or UpstageCandidateSelectorClient()
     selector_state = dict(state)
     expanded_genres = list(state.get("expanded_preferred_genres") or [])
@@ -229,11 +237,25 @@ def select_final_5(state: RecommendationSessionState) -> dict[str, Any]:
     unique_candidates = _deduplicate_candidates(source_candidates)
     final_candidates: list[dict[str, Any]] = []
     for order, candidate in enumerate(unique_candidates[:FINAL_BUNDLE_SIZE], start=1):
-        final_candidate = dict(candidate)
-        final_candidate["selection_order"] = order
-        final_candidate.setdefault("slot_type", "anchor" if order == 1 else "discovery")
-        final_candidate.setdefault("reason", _build_final_reason(candidate, order))
-        final_candidates.append(final_candidate)
+        signals = candidate.get("match_signals") or {}
+        final_candidates.append({
+            "song_id": candidate.get("song_id", ""),
+            "title": candidate.get("title", ""),
+            "artists": list(candidate.get("artists") or []),
+            "album": candidate.get("album", ""),
+            "album_art_url": candidate.get("album_art_url", ""),
+            "preview_url": candidate.get("preview_url", ""),
+            "slot_type": candidate.get("slot_type") or ("anchor" if order == 1 else "discovery"),
+            "reason": candidate.get("selection_reason") or candidate.get("reason") or _build_final_reason(candidate, order),
+            "score_breakdown": {
+                "era": round(signals.get("era", 0.0), 4),
+                "genre": round(signals.get("genre", 0.0), 4),
+                "artist": round(signals.get("artist", 0.0), 4),
+                "text": round(signals.get("text", 0.0), 4),
+                "feedback": round(signals.get("feedback", 0.0), 4),
+                "final": round(candidate.get("priority_score", 0.0), 4),
+            },
+        })
 
     return {
         "final_bundle": final_candidates,
@@ -280,6 +302,7 @@ def _expand_preferences(
         }
 
     expander = preference_expander or UpstagePreferenceExpanderClient()
+    print(f"[Recommender] preference_expansion 시작 — genres={preferred_genres}, artists={preferred_artists}")
     try:
         expansion = expander.expand_preferences(
             {
@@ -291,7 +314,9 @@ def _expand_preferences(
                 "context_text": state.get("context_text", ""),
             }
         )
-    except Exception:
+        print(f"[Recommender] preference_expansion 완료 — expanded_genres={expansion.get('expanded_preferred_genres')}, expanded_artists={expansion.get('expanded_preferred_artists')}")
+    except Exception as e:
+        print(f"[Recommender] preference_expansion 실패 (폴백) — {e}")
         return {
             "expanded_preferred_genres": normalize_expanded_preferences(preferred_genres),
             "expanded_preferred_artists": normalize_expanded_preferences(preferred_artists),

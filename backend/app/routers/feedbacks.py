@@ -21,11 +21,14 @@ def submit_feedback(
         raise HTTPException(status_code=404, detail="session not found")
 
     # 피드백을 오케스트레이터가 읽는 context 형태로 만든다.
-    state = session.to_state(free_text="")
-    state["context"] = {
+    feedback_context = {
         "bundle_id": body.bundle_id or session.last_bundle_id,
         "songs": [item.model_dump() for item in body.feedbacks],
+        "feedback_summary": {"comment": body.comment} if body.comment else {},
     }
+    state = session.to_state(free_text="")
+    state["context"] = feedback_context
+    state["final_bundle"] = list(session.last_songs.values())
 
     try:
         updates = service.apply_feedback(state)
@@ -36,6 +39,9 @@ def submit_feedback(
     session.negative_count = updates.get("negative_count", 0)
     session.exclude_song_ids = updates.get("exclude_song_ids", session.exclude_song_ids)
     session.next_action = updates.get("next_action", session.next_action)
+    # 다음 추천에 자동 반영할 피드백 정보 저장
+    session.follow_up_text = body.comment
+    session.last_feedback_context = updates.get("context") or feedback_context
 
     # 저장(saved=true) 곡을 보관함에 담기
     saved_ids = {item.song_id for item in body.feedbacks if item.saved}

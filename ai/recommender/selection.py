@@ -110,9 +110,23 @@ def build_candidate_selection_user_prompt(payload: CandidateSelectionInput) -> s
         "target_size": payload.get("target_size", CANDIDATE_SELECTION_TARGET_SIZE),
         "final_size": payload.get("final_size", FINAL_BUNDLE_SIZE),
         "context": payload.get("context", {}),
-        "candidate_pool": payload.get("candidate_pool", []),
+        "candidate_pool": [_slim_candidate(c) for c in payload.get("candidate_pool", [])],
     }
     return json.dumps(request_payload, ensure_ascii=False, indent=2)
+
+
+def _slim_candidate(candidate: dict) -> dict:
+    """LLM에 전달할 후보에서 가사 전문 등 불필요한 대용량 필드를 제거합니다."""
+    return {
+        "song_id": candidate.get("song_id", ""),
+        "title": candidate.get("title", ""),
+        "artists": candidate.get("artists", []),
+        "album": candidate.get("album", ""),
+        "release_year": candidate.get("release_year"),
+        "genres": candidate.get("genres", []),
+        "like_count": candidate.get("like_count", 0),
+        "match_signals": candidate.get("match_signals", {}),
+    }
 
 
 def build_candidate_selection_messages(payload: CandidateSelectionInput) -> list[PromptMessage]:

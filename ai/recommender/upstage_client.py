@@ -98,6 +98,7 @@ class UpstagePreferenceExpanderClient:
             "temperature": 0.2,
             "top_p": 0.8,
             "max_tokens": 2048,
+            "response_format": {"type": "json_object"},
         }
         request = Request(
             UPSTAGE_CHAT_COMPLETIONS_URL,
@@ -154,7 +155,8 @@ class UpstageCandidateSelectorClient:
             ],
             "temperature": 0.2,
             "top_p": 0.8,
-            "max_tokens": 4096,
+            "max_tokens": 8192,
+            "response_format": {"type": "json_object"},
         }
         request = Request(
             UPSTAGE_CHAT_COMPLETIONS_URL,
@@ -182,6 +184,7 @@ class UpstageCandidateSelectorClient:
             text = "".join(part.get("text", "") for part in text if isinstance(part, dict))
         if not isinstance(text, str) or not text.strip():
             raise UpstageSelectionError("Upstage 응답에서 텍스트를 찾지 못했습니다.")
+        print(f"[Recommender] LLM 응답 원문 (앞 500자): {text[:500]}")
         output = parse_candidate_selection_output(text)
         self._validate_output(output, normalized_pool, payload.get("target_size", 20))
         return output

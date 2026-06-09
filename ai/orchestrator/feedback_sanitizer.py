@@ -24,7 +24,6 @@ def feedback_from_song(song: dict[str, Any]) -> Feedback:
     return Feedback(
         song_id=str(song.get("song_id") or "").strip(),
         reaction=_normalize_reaction(str(song.get("reaction") or "")),
-        comment=_normalize_comment(str(song.get("comment") or "")),
         saved=bool(song.get("saved", False)),
     )
 
@@ -43,7 +42,7 @@ def merge_exclude_song_ids(existing_ids: list[str], new_ids: list[str]) -> list[
 
 def sanitize_context(context: dict[str, Any] | None) -> RecommendationContext:
     if not isinstance(context, dict):
-        return {"bundle_id": "", "songs": []}
+        return {"bundle_id": "", "songs": [], "feedback_summary": {}}
     bundle_id = str(context.get("bundle_id") or "").strip()
     songs = context.get("songs", [])
     if not isinstance(songs, list):
@@ -61,10 +60,15 @@ def sanitize_context(context: dict[str, Any] | None) -> RecommendationContext:
                 "title": str(song.get("title") or "").strip(),
                 "artists": [str(artist).strip() for artist in song.get("artists", []) if str(artist).strip()],
                 "reaction": reaction,
-                "comment": _normalize_comment(str(song.get("comment") or "")),
             }
         )
-    return {"bundle_id": bundle_id, "songs": sanitized_songs}
+    raw_summary = context.get("feedback_summary")
+    feedback_summary: dict[str, Any] = {}
+    if isinstance(raw_summary, dict):
+        raw_comment = _normalize_comment(str(raw_summary.get("comment") or ""))
+        if raw_comment:
+            feedback_summary["comment"] = raw_comment
+    return {"bundle_id": bundle_id, "songs": sanitized_songs, "feedback_summary": feedback_summary}
 
 
 def _deduplicate_feedback_songs(songs: list[dict[str, Any]]) -> list[dict[str, Any]]:

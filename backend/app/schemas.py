@@ -25,8 +25,7 @@ class SessionResponse(BaseModel):
 # ---- 추천 ----
 class RecommendRequest(BaseModel):
     session_id: str
-    free_text: str = Field(..., min_length=1)
-    follow_up_text: str = ""
+    free_text: str = ""
 
 
 class RecommendedSongOut(BaseModel):
@@ -53,19 +52,28 @@ class FeedbackItem(BaseModel):
     title: str = ""
     artists: list[str] = Field(default_factory=list)
     reaction: Literal["좋아요", "싫어요"]
-    comment: str = ""
     saved: bool = False
 
 
 class FeedbackRequest(BaseModel):
     session_id: str
     bundle_id: str = ""
+    comment: str = ""  # 번들 전체에 대한 코멘트
     feedbacks: list[FeedbackItem]
 
 
 class FeedbackResponse(BaseModel):
     negative_count: int
     # recommend_next_bundle / request_follow_up_text / finish
+    next_action: str
+
+
+# ---- 팔로업 텍스트 ----
+class FollowUpRequest(BaseModel):
+    text: str = Field(..., min_length=1)
+
+
+class FollowUpResponse(BaseModel):
     next_action: str
 
 

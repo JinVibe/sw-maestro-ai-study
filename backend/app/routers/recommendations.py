@@ -20,7 +20,7 @@ def recommend(
     if session is None:
         raise HTTPException(status_code=404, detail="session not found")
 
-    state = session.to_state(free_text=body.free_text, follow_up_text=body.follow_up_text)
+    state = session.to_state(free_text=body.free_text)
 
     try:
         bundle = service.recommend(state)

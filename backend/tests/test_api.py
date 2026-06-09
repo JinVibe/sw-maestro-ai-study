@@ -29,6 +29,7 @@ def client(monkeypatch):
     # iTunes 검증/선호 확장 LLM 호출 스킵(네트워크/키 없이 구동)
     monkeypatch.setenv("AI_SKIP_ITUNES_VERIFICATION", "1")
     monkeypatch.setenv("AI_SKIP_PREFERENCE_EXPANSION", "1")
+    monkeypatch.setenv("AI_SKIP_LLM_SELECTION", "1")
 
     from app.main import app
     from app.deps import get_orchestrator

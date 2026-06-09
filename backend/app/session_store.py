@@ -25,8 +25,12 @@ class Session:
     last_songs: dict[str, dict[str, Any]] = field(default_factory=dict)
     last_bundle_id: str = ""
     library: list[dict[str, Any]] = field(default_factory=list)
+    # 피드백에서 추출한 번들 코멘트 — 다음 추천에 자동 반영
+    follow_up_text: str = ""
+    # 마지막 피드백 context (songs + feedback_summary) — 다음 추천 시 AI에 전달
+    last_feedback_context: dict[str, Any] = field(default_factory=dict)
 
-    def to_state(self, free_text: str, follow_up_text: str = "") -> dict[str, Any]:
+    def to_state(self, free_text: str) -> dict[str, Any]:
         """추천 파이프라인에 넘길 세션 상태 dict를 만든다."""
         return {
             "user_id": self.user_id,
@@ -35,7 +39,8 @@ class Session:
             "preferred_genres": self.preferred_genres,
             "preferred_artists": self.preferred_artists,
             "free_text": free_text,
-            "follow_up_text": follow_up_text,
+            "follow_up_text": self.follow_up_text,
+            "context": self.last_feedback_context,
             "exclude_song_ids": list(self.exclude_song_ids),
             "negative_count": self.negative_count,
             "next_action": self.next_action,
