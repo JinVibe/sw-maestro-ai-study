@@ -1,0 +1,16 @@
+# backend Docker 빌드용 제외 목록 (context = repo 루트)
+.git
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.venv
+.venv
+
+# 프론트엔드는 백엔드 이미지에 불필요
+flutter
+
+# 비밀/대용량 데이터는 이미지에 넣지 않음
+**/.env
+ai/data/raw
+ai/data/embeddings/*.jsonl
