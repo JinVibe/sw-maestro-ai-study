@@ -111,5 +111,4 @@ class RecommendationBundle:
 class Feedback:
     song_id: str
     reaction: str
-    comment: str = ""
     saved: bool = False
