@@ -3,9 +3,10 @@ from __future__ import annotations
 import os
 import re
 from datetime import date
-from typing import Any, Callable, TypedDict
+from typing import TYPE_CHECKING, Any, Callable, TypedDict
 
-from ..orchestrator.state import NextAction, RecommendationSessionState
+if TYPE_CHECKING:
+    from ..orchestrator.state import RecommendationSessionState
 from .catalog import load_songs
 from .era import preferred_year_center_from_age, release_year
 from .feedback import count_negative_feedbacks
@@ -46,7 +47,7 @@ class CandidateRecord(TypedDict, total=False):
 
 
 CandidateSelector = Callable[
-    [RecommendationSessionState, list[CandidateRecord], int],
+    [Any, list[CandidateRecord], int],
     list[CandidateRecord],
 ]
 

@@ -209,17 +209,16 @@ preferred_year_center ± 8년 우선
 
 ## 6. Agent 피드백 해석
 
-클라이언트 피드백 예시:
+클라이언트 피드백 예시. `comment`는 곡별이 아닌 번들 전체에 대한 코멘트다.
 
 ```json
 {
   "bundle_id": "bundle_0516889bd960",
+  "comment": "이런 옛날 발라드 더 듣고 싶어요",
   "feedbacks": [
     {
       "song_id": "708211",
-      "reaction": "듣고 싶어요",
-      "rating": 5,
-      "comment": "이런 옛날 발라드 더 듣고 싶어요",
+      "reaction": "좋아요",
       "saved": true
     }
   ]
@@ -229,29 +228,11 @@ preferred_year_center ± 8년 우선
 허용 reaction:
 
 ```text
-알아요
-듣고 싶어요
-몰라요
+좋아요
+싫어요
 ```
 
-Agent Orchestrator는 코멘트와 대화 맥락을 보고 다음 값을 결정한다.
-
-| 값 | Agent 책임 |
-| --- | --- |
-| `era_shift` | 선호 연도 중심을 얼마나 이동할지 결정 |
-| `strategy_weights` | 다음 추천에서 theme/era/discovery/quality를 얼마나 볼지 결정 |
-| follow-up question text | `next_action`이 `follow_up_question`일 때 사용자 질문 생성 |
-
-`era_shift` 권장 v1.1 규칙:
-
-```text
-오래된/추억/예전/레트로 흐름을 명시 -> -4
-최신/요즘/최근/신곡 흐름을 명시 -> 4
-시대 언급 없음 -> 0
-강한 표현이면 -8 또는 8 사용 가능
-```
-
-추천 모듈은 `era_shift`를 `2000~2025` 범위 안에서 자동 보정한다.
+Orchestrator는 번들 코멘트(`comment`)를 `feedback_summary.comment`로 저장해 다음 추천 시 AI에 자동 전달한다. `follow_up_text`도 세션에서 자동으로 채워지며, 프론트가 별도로 전달할 필요 없다.
 
 ## 7. 피드백 처리
 
@@ -306,31 +287,17 @@ session.exclude_song_ids.extend([song["song_id"] for song in bundle_response["so
 
 ## 8. 재추천
 
-다음 추천 요청에는 업데이트된 상태를 그대로 넣는다.
-
-```python
-next_request = RecommendationRequest(
-    user_id=session.user_id,
-    session_id=session.session_id,
-    age=session.age,
-    preferred_year_center=session.preferred_year_center,
-    preferred_genres=session.preferred_genres,
-    preferred_artists=session.preferred_artists,
-    free_text=next_free_text,
-    exclude_song_ids=session.exclude_song_ids,
-    strategy_weights=session.strategy_weights,
-    options={"bundle_size": 6},
-)
-```
+두 번째 번들부터는 `free_text` 없이 `session_id`만으로 추천 요청이 가능하다. 백엔드 세션에 저장된 `follow_up_text`와 `last_feedback_context`가 자동으로 AI에 전달된다.
 
 `next_action` 처리:
 
-| 값 | 백엔드/Agent 행동 |
+| 값 | 백엔드/프론트 행동 |
 | --- | --- |
-| `recommend_next_bundle` | 바로 재추천 가능 |
-| `follow_up_question` | Agent가 꼬리 질문을 먼저 생성 |
+| `recommend_next_bundle` | `POST /recommendations` 바로 호출 |
+| `request_follow_up_text` | `POST /sessions/{id}/follow-up`으로 텍스트 저장 후 추천 요청 |
+| `finish` | 추천 종료 |
 
-`몰라요`가 3회 연속이면 `follow_up_question`이 반환된다.
+`싫어요`가 3개 이상이면 `request_follow_up_text`가 반환된다.
 
 ## 9. 전체 데이터 준비
 

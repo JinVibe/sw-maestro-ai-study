@@ -52,7 +52,7 @@ def build_recommendation_graph_skeleton() -> OrchestratorGraphSkeleton:
             "verify_with_itunes": ("select_final_5",),
             "select_final_5": ("collect_feedback",),
             "collect_feedback": ("decide_next_action",),
-            "recommend_next_bundle": ("build_candidate_pool",),
+            "recommend_next_bundle": ("ingest_context",),
             "request_follow_up_text": ("END",),
             "finish": ("END",),
         },
@@ -94,7 +94,7 @@ def build_recommendation_graph(checkpointer=None):
         "decide_next_action",
         route_after_feedback,
         {
-            "recommend_next_bundle": "build_candidate_pool",
+            "recommend_next_bundle": "ingest_context",
             "request_follow_up_text": END,
             "finish": END,
         },

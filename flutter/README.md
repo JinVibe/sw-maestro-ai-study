@@ -9,6 +9,18 @@ flutter pub get
 flutter run
 ```
 
+Run against a local backend:
+
+```bash
+flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8001
+```
+
+For a physical phone on the same Wi-Fi, use the PC's LAN IP instead:
+
+```bash
+flutter run -d <device_id> --dart-define=API_BASE_URL=http://192.168.0.48:8001
+```
+
 If platform folders are not present yet, generate them inside this directory:
 
 ```bash

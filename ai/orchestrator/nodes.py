@@ -194,6 +194,7 @@ def select_final_5(state: RecommendationSessionState) -> dict[str, Any]:
     return {
         "final_bundle": songs,
         "bundle_id": bundle_id,
+        "emotion_title": emotion_title,
         "next_action": "collect_feedback",
     }
 
@@ -225,18 +226,25 @@ def collect_feedback(state: RecommendationSessionState) -> dict[str, Any]:
             for artist in song.get("artists", []):
                 reaction_history[str(artist)] = reaction
 
-    # Feedback 시트 저장
+    # Feedback 시트 저장 — final_bundle로 title/artists 보완
     user_id = str(state.get("user_id") or "")
     session_id = str(state.get("session_id") or "")
     bundle_id = str(state.get("bundle_id") or "")
     bundle_comment = str((state.get("context") or {}).get("feedback_summary", {}).get("comment") or "").strip()
+    final_bundle_map = {s.get("song_id", ""): s for s in (state.get("final_bundle") or [])}
     ts = _now()
     for song in feedback_songs:
+        song_id = song.get("song_id", "")
+        meta = final_bundle_map.get(song_id, {})
+        title = song.get("title") or meta.get("title", "")
+        artists = song.get("artists") or meta.get("artists", [])
+        if not isinstance(artists, list):
+            artists = []
         _save_to_sheet(_SHEET_FEEDBACK, _HEADER_FEEDBACK, [
             ts, user_id, session_id, bundle_id,
-            song.get("song_id", ""),
-            song.get("title", ""),
-            ",".join(song.get("artists", [])),
+            song_id,
+            title,
+            ",".join(str(a) for a in artists),
             song.get("reaction", ""),
             bundle_comment,
         ])

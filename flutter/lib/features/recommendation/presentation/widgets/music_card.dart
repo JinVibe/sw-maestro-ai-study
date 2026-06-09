@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../domain/music_recommendation.dart';
@@ -12,7 +14,7 @@ class MusicCard extends StatelessWidget {
 
   final MusicRecommendation recommendation;
   final bool isTopCard;
-  final ValueChanged<RecommendationReaction> onDismissed;
+  final Future<void> Function(RecommendationReaction reaction) onDismissed;
 
   @override
   Widget build(BuildContext context) {
@@ -21,16 +23,22 @@ class MusicCard extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Image.network(
-            recommendation.albumArtUrl,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return ColoredBox(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: const Icon(Icons.album, size: 72),
-              );
-            },
-          ),
+          if (recommendation.albumArtUrl.isEmpty)
+            ColoredBox(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: const Icon(Icons.album, size: 72),
+            )
+          else
+            Image.network(
+              recommendation.albumArtUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return ColoredBox(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: const Icon(Icons.album, size: 72),
+                );
+              },
+            ),
           const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -106,7 +114,7 @@ class MusicCard extends StatelessWidget {
         final reaction = direction == DismissDirection.endToStart
             ? RecommendationReaction.like
             : RecommendationReaction.unsure;
-        onDismissed(reaction);
+        unawaited(onDismissed(reaction));
       },
       child: card,
     );

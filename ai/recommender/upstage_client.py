@@ -98,6 +98,7 @@ class UpstagePreferenceExpanderClient:
             "temperature": 0.2,
             "top_p": 0.8,
             "max_tokens": 2048,
+            "response_format": {"type": "json_object"},
         }
         request = Request(
             UPSTAGE_CHAT_COMPLETIONS_URL,
@@ -155,6 +156,7 @@ class UpstageCandidateSelectorClient:
             "temperature": 0.2,
             "top_p": 0.8,
             "max_tokens": 8192,
+            "response_format": {"type": "json_object"},
         }
         request = Request(
             UPSTAGE_CHAT_COMPLETIONS_URL,

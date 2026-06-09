@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 
 import '../../domain/music_recommendation.dart';
 
 class ReactionBar extends StatelessWidget {
   const ReactionBar({required this.onReact, super.key});
 
-  final ValueChanged<RecommendationReaction> onReact;
+  final Future<void> Function(RecommendationReaction reaction) onReact;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +28,8 @@ class ReactionBar extends StatelessWidget {
         children: [
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: () => onReact(RecommendationReaction.unsure),
+              onPressed: () =>
+                  unawaited(onReact(RecommendationReaction.unsure)),
               icon: const Icon(Icons.help_outline),
               label: const Text('글쎄요'),
             ),
@@ -35,7 +37,7 @@ class ReactionBar extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: FilledButton.icon(
-              onPressed: () => onReact(RecommendationReaction.like),
+              onPressed: () => unawaited(onReact(RecommendationReaction.like)),
               icon: const Icon(Icons.favorite_outline),
               label: const Text('좋아요'),
             ),

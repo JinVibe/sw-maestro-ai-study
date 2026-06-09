@@ -62,6 +62,7 @@ class RecommendationSessionState(TypedDict, total=False):
     candidate_pool_count: int
 
     bundle_id: str
+    emotion_title: str
     reaction_history: dict[str, str]      # artist → 마지막 반응 (번들 간 상충 감지용)
     outlier_follow_up_question: str        # 이상치 감지 시 follow-up 질문
 

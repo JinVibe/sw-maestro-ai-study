@@ -139,23 +139,24 @@ recommender가 돌려준 5곡을 다음 기준으로 확인한다.
 
 ### 4-5. 프론트 → Orchestrator (사용자 피드백)
 
+`comment`는 곡별이 아닌 번들 전체에 대한 코멘트다.
+
 ```json
 {
   "bundle_id": "bundle_ceaa556bb5d6",
+  "comment": "조금 더 옛날 노래로 듣고 싶어요",
   "songs": [
     {
       "song_id": "3849494",
       "title": "이등병의 편지",
       "artists": ["김광석"],
-      "reaction": "좋아요",
-      "comment": ""
+      "reaction": "좋아요"
     },
     {
       "song_id": "82594",
       "title": "Blue Sky",
       "artists": ["박기영"],
-      "reaction": "싫어요",
-      "comment": "조금 더 옛날 노래로 듣고 싶어요"
+      "reaction": "싫어요"
     }
   ]
 }
@@ -198,9 +199,12 @@ recommender가 돌려준 5곡을 다음 기준으로 확인한다.
         "artists": ["박기영"],
         "reaction": "싫어요"
       }
-    ]
+    ],
+    "feedback_summary": {
+      "comment": "조금 더 옛날 노래로 듣고 싶어요"
+    }
   },
-  "context_text": "{\"bundle_id\":\"bundle_ceaa556bb5d6\",\"songs\":[...]}",
+  "context_text": "{\"bundle_id\":\"bundle_ceaa556bb5d6\",\"songs\":[...],\"feedback_summary\":{\"comment\":\"...\"}}",
   "follow_up_text": "조금 더 옛날 노래로 듣고 싶어요",
   "exclude_song_ids": ["3849494", "82594"],
   "catalog_path": "ai/data/samples/melon_kpop_sample.jsonl",
@@ -212,6 +216,8 @@ recommender가 돌려준 5곡을 다음 기준으로 확인한다.
   "next_action": "recommend_next_bundle"
 }
 ```
+
+`follow_up_text`는 백엔드 세션에서 자동으로 채워진다. 프론트가 별도로 전달하지 않아도 된다.
 
 ## 5. 응답 JSON 필드 설명
 

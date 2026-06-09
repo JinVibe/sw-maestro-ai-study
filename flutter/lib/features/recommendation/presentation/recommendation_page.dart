@@ -32,8 +32,16 @@ class RecommendationPage extends ConsumerWidget {
             padding: const EdgeInsets.only(right: 10),
             child: IconButton(
               tooltip: '보관함',
-              onPressed: () =>
-                  _showSavedSheet(context, state.savedRecommendations),
+              onPressed: () async {
+                await controller.refreshLibrary();
+                if (!context.mounted) {
+                  return;
+                }
+                final saved = ref
+                    .read(recommendationControllerProvider)
+                    .savedRecommendations;
+                _showSavedSheet(context, saved);
+              },
               icon: const Icon(Icons.bookmarks_outlined),
             ),
           ),
@@ -68,17 +76,34 @@ class RecommendationPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  '하루가 느슨해지는 시간에 맞춰, 오늘의 분위기와 어울리는 곡을 골랐어요.',
+                  state.emotionTitle.isEmpty
+                      ? '하루가 느슨해지는 시간에 맞춰, 오늘의 분위기와 어울리는 곡을 골랐어요.'
+                      : state.emotionTitle,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: const Color(0xFF8B7666),
                       ),
                 ),
+                if (state.errorMessage.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _ErrorBanner(
+                    message: state.errorMessage,
+                    onRetry: () async {
+                      if (state.sessionId.isEmpty) {
+                        await controller.initialize();
+                      } else {
+                        await controller.loadRecommendations();
+                      }
+                    },
+                  ),
+                ],
                 const SizedBox(height: 16),
                 Expanded(
-                  child: _RecommendationStack(
-                    recommendations: state.queue,
-                    onSwiped: controller.react,
-                  ),
+                  child: state.isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _RecommendationStack(
+                          recommendations: state.queue,
+                          onSwiped: controller.react,
+                        ),
                 ),
                 const SizedBox(height: 16),
                 ReactionBar(onReact: controller.react),
@@ -175,6 +200,7 @@ class RecommendationPage extends ConsumerWidget {
     BuildContext context,
     RecommendationController controller,
   ) {
+    final textController = TextEditingController();
     return showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -193,6 +219,7 @@ class RecommendationPage extends ConsumerWidget {
               const Text('이번 추천에서 어떤 점이 아쉬웠나요?'),
               const SizedBox(height: 16),
               TextField(
+                controller: textController,
                 minLines: 2,
                 maxLines: 4,
                 decoration: InputDecoration(
@@ -207,8 +234,11 @@ class RecommendationPage extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               FilledButton(
-                onPressed: () {
-                  controller.dismissFollowUp();
+                onPressed: () async {
+                  await controller.submitFollowUp(textController.text.trim());
+                  if (!context.mounted) {
+                    return;
+                  }
                   Navigator.of(context).pop();
                 },
                 child: const Text('반영하기'),
@@ -217,6 +247,44 @@ class RecommendationPage extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBF4).withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE8CFB5)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              message,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Color(0xFF8B4C3B)),
+            ),
+          ),
+          TextButton(
+            onPressed: () => onRetry(),
+            child: const Text('재시도'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -280,7 +348,7 @@ class _RecommendationStack extends StatelessWidget {
   });
 
   final List<MusicRecommendation> recommendations;
-  final ValueChanged<RecommendationReaction> onSwiped;
+  final Future<void> Function(RecommendationReaction reaction) onSwiped;
 
   @override
   Widget build(BuildContext context) {
