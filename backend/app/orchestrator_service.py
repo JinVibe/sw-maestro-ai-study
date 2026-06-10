@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import uuid
 from pathlib import Path
 from typing import Any, Callable
@@ -65,7 +66,8 @@ class OrchestratorService:
         state.update(ingest_context(state))
         expander = self._expander_factory() if self._expander_factory else None
         state.update(build_candidate_pool(state, preference_expander=expander))
-        state.update(llm_select_20_candidates(state, selector=self._selector_factory()))
+        selector = None if _skip_llm_selection() else self._selector_factory()
+        state.update(llm_select_20_candidates(state, selector=selector))
         state.update(verify_with_itunes(state, verifier=self._verifier))
         state.update(select_final_5(state))
 
@@ -95,3 +97,11 @@ class OrchestratorService:
             "songs": songs,
             "next_action": state.get("next_action", "collect_feedback"),
         }
+
+
+def _skip_llm_selection() -> bool:
+    return os.environ.get("AI_SKIP_LLM_SELECTION", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
