@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-SAMPLE_CATALOG = ROOT / "ai/data/samples/melon_kpop_sample.jsonl"
+RAW_CATALOG = ROOT / "ai/data/raw/melon_kpop_2000_2025.jsonl"
 
 
 class FakeSelector:
@@ -36,7 +36,7 @@ def client(monkeypatch):
     from app.orchestrator_service import OrchestratorService
 
     fake_service = OrchestratorService(
-        catalog_path=SAMPLE_CATALOG,
+        catalog_path=RAW_CATALOG,
         selector_factory=FakeSelector,
         expander_factory=None,
         verifier=None,  # AI_SKIP_ITUNES_VERIFICATION=1 이라 실제 호출 안 함
