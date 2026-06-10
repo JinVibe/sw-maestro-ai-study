@@ -415,7 +415,7 @@ class _WarmHeader extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            '저녁의\n플레이리스트',
+            '오늘의\n플레이리스트',
             style: Theme.of(context).textTheme.headlineLarge,
           ),
         ),
