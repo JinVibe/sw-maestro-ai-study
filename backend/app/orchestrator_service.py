@@ -53,8 +53,9 @@ class OrchestratorService:
         verifier: Any | None = None,
     ) -> None:
         # 카탈로그(후보 소스)는 서버 시작 시 1회 로드해 재사용한다.
-        self.catalog = load_songs(catalog_path)
-        self.catalog.extend(_load_supplemental_catalog(self.catalog))
+        supplemental_catalog = _load_supplemental_catalog()
+        base_catalog = _exclude_duplicate_songs(load_songs(catalog_path), supplemental_catalog)
+        self.catalog = [*supplemental_catalog, *base_catalog]
         self._selector_factory = selector_factory
         self._expander_factory = expander_factory
         self._verifier = verifier
@@ -108,7 +109,7 @@ def _skip_llm_selection() -> bool:
     }
 
 
-def _load_supplemental_catalog(existing: list[Any]) -> list[Any]:
+def _load_supplemental_catalog() -> list[Any]:
     supplement_path = Path(
         os.environ.get(
             "CATALOG_SUPPLEMENT_PATH",
@@ -117,10 +118,31 @@ def _load_supplemental_catalog(existing: list[Any]) -> list[Any]:
     )
     if not supplement_path.exists():
         return []
+    return load_songs(supplement_path)
 
-    existing_ids = {song.song_id for song in existing if getattr(song, "song_id", "")}
+
+def _exclude_duplicate_songs(songs: list[Any], priority_songs: list[Any]) -> list[Any]:
+    priority_signatures = {
+        _song_signature(song)
+        for song in priority_songs
+        if _song_signature(song) is not None
+    }
     return [
         song
-        for song in load_songs(supplement_path)
-        if song.song_id not in existing_ids
+        for song in songs
+        if _song_signature(song) not in priority_signatures
     ]
+
+
+def _song_signature(song: Any) -> tuple[str, tuple[str, ...]] | None:
+    title = str(getattr(song, "title", "") or "").casefold().strip()
+    artists = tuple(
+        sorted(
+            str(getattr(artist, "name", "") or "").casefold().strip()
+            for artist in getattr(song, "artists", [])
+            if str(getattr(artist, "name", "") or "").strip()
+        )
+    )
+    if not title:
+        return None
+    return title, artists
