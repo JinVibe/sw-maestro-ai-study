@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import uuid
 from pathlib import Path
 from typing import Any, Callable
@@ -52,7 +53,9 @@ class OrchestratorService:
         verifier: Any | None = None,
     ) -> None:
         # 카탈로그(후보 소스)는 서버 시작 시 1회 로드해 재사용한다.
-        self.catalog = load_songs(catalog_path)
+        supplemental_catalog = _load_supplemental_catalog()
+        base_catalog = _exclude_duplicate_songs(load_songs(catalog_path), supplemental_catalog)
+        self.catalog = [*supplemental_catalog, *base_catalog]
         self._selector_factory = selector_factory
         self._expander_factory = expander_factory
         self._verifier = verifier
@@ -65,7 +68,8 @@ class OrchestratorService:
         state.update(ingest_context(state))
         expander = self._expander_factory() if self._expander_factory else None
         state.update(build_candidate_pool(state, preference_expander=expander))
-        state.update(llm_select_20_candidates(state, selector=self._selector_factory()))
+        selector = None if _skip_llm_selection() else self._selector_factory()
+        state.update(llm_select_20_candidates(state, selector=selector))
         state.update(verify_with_itunes(state, verifier=self._verifier))
         state.update(select_final_5(state))
 
@@ -95,3 +99,50 @@ class OrchestratorService:
             "songs": songs,
             "next_action": state.get("next_action", "collect_feedback"),
         }
+
+
+def _skip_llm_selection() -> bool:
+    return os.environ.get("AI_SKIP_LLM_SELECTION", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
+def _load_supplemental_catalog() -> list[Any]:
+    supplement_path = Path(
+        os.environ.get(
+            "CATALOG_SUPPLEMENT_PATH",
+            "ai/data/samples/modern_kpop_supplement.jsonl",
+        )
+    )
+    if not supplement_path.exists():
+        return []
+    return load_songs(supplement_path)
+
+
+def _exclude_duplicate_songs(songs: list[Any], priority_songs: list[Any]) -> list[Any]:
+    priority_signatures = {
+        _song_signature(song)
+        for song in priority_songs
+        if _song_signature(song) is not None
+    }
+    return [
+        song
+        for song in songs
+        if _song_signature(song) not in priority_signatures
+    ]
+
+
+def _song_signature(song: Any) -> tuple[str, tuple[str, ...]] | None:
+    title = str(getattr(song, "title", "") or "").casefold().strip()
+    artists = tuple(
+        sorted(
+            str(getattr(artist, "name", "") or "").casefold().strip()
+            for artist in getattr(song, "artists", [])
+            if str(getattr(artist, "name", "") or "").strip()
+        )
+    )
+    if not title:
+        return None
+    return title, artists

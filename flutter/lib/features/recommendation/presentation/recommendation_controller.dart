@@ -113,7 +113,7 @@ class RecommendationController extends StateNotifier<RecommendationState> {
     }
   }
 
-  Future<void> loadRecommendations({String followUpText = ''}) async {
+  Future<void> loadRecommendations() async {
     if (state.sessionId.isEmpty) {
       return;
     }
@@ -123,7 +123,6 @@ class RecommendationController extends StateNotifier<RecommendationState> {
       final bundle = await _apiClient.recommend(
         sessionId: state.sessionId,
         freeText: _recommendationPrompt,
-        followUpText: followUpText,
       );
       state = state.copyWith(
         queue: bundle.songs,
@@ -166,12 +165,15 @@ class RecommendationController extends StateNotifier<RecommendationState> {
     }
 
     try {
-      await _apiClient.submitFeedback(
+      final feedback = await _apiClient.submitFeedback(
         sessionId: state.sessionId,
         bundleId: state.bundleId,
         recommendation: current,
         reaction: reaction,
       );
+      if (feedback.nextAction == 'request_follow_up_text') {
+        state = state.copyWith(unsureStreak: 3);
+      }
       if (reaction == RecommendationReaction.like) {
         await refreshLibrary();
       }
@@ -185,8 +187,24 @@ class RecommendationController extends StateNotifier<RecommendationState> {
   }
 
   Future<void> submitFollowUp(String followUpText) async {
-    state = state.copyWith(unsureStreak: 0);
-    await loadRecommendations(followUpText: followUpText);
+    if (state.sessionId.isEmpty || followUpText.isEmpty) {
+      state = state.copyWith(unsureStreak: 0);
+      return;
+    }
+
+    state = state.copyWith(isLoading: true, errorMessage: '', unsureStreak: 0);
+    try {
+      await _apiClient.submitFollowUp(
+        sessionId: state.sessionId,
+        text: followUpText,
+      );
+      await loadRecommendations();
+    } catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: error.toString(),
+      );
+    }
   }
 
   Future<void> refreshLibrary() async {

@@ -26,7 +26,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Oh my memory'), findsOneWidget);
-    expect(find.text('저녁의\n플레이리스트'), findsOneWidget);
+    expect(find.text('오늘의\n플레이리스트'), findsOneWidget);
+    expect(find.text('대표 추천'), findsOneWidget);
+    expect(find.text('anchor'), findsNothing);
     expect(find.text('좋아요'), findsOneWidget);
     expect(find.text('보관'), findsNothing);
     expect(find.text('글쎄요'), findsOneWidget);
@@ -49,22 +51,42 @@ class _FakeApiClient extends RecommendationApiClient {
   Future<BundleDto> recommend({
     required String sessionId,
     required String freeText,
-    String followUpText = '',
   }) async {
     return BundleDto(
       bundleId: 'bundle_test',
       emotionTitle: '테스트 추천 묶음',
       songs: [
-        MusicRecommendation(
-          id: 'song_test',
-          title: '테스트 곡',
-          artist: '테스트 아티스트',
-          albumArtUrl: '',
-          contextLabel: 'AI 추천',
-          previewDescription: '테스트 추천 이유',
-          externalUrl: Uri.parse('https://music.apple.com/'),
-        ),
+        MusicRecommendation.fromApiJson({
+          'song_id': 'song_test',
+          'title': '테스트 곡',
+          'artists': ['테스트 아티스트'],
+          'album_art_url': '',
+          'preview_url': 'https://music.apple.com/',
+          'slot_type': 'anchor',
+          'reason': '테스트 추천 이유',
+        }),
       ],
     );
+  }
+
+  @override
+  Future<FeedbackDto> submitFeedback({
+    required String sessionId,
+    required String bundleId,
+    required MusicRecommendation recommendation,
+    required RecommendationReaction reaction,
+  }) async {
+    return const FeedbackDto(
+      negativeCount: 0,
+      nextAction: 'recommend_next_bundle',
+    );
+  }
+
+  @override
+  Future<FollowUpDto> submitFollowUp({
+    required String sessionId,
+    required String text,
+  }) async {
+    return const FollowUpDto(nextAction: 'recommend_next_bundle');
   }
 }

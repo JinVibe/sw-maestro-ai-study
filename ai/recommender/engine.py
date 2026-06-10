@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import date
 from typing import TYPE_CHECKING, Any, Callable, TypedDict
 
 if TYPE_CHECKING:
@@ -177,7 +176,17 @@ def llm_select_20_candidates(
         selector_state["preferred_genres"] = expanded_genres
     if expanded_artists:
         selector_state["preferred_artists"] = expanded_artists
-    selection = selector.select_candidates_from_state(selector_state)
+    try:
+        selection = selector.select_candidates_from_state(selector_state)
+    except Exception:
+        selection = {
+            "selected_song_ids": [
+                str(candidate["song_id"])
+                for candidate in candidate_pool[:20]
+                if candidate.get("song_id")
+            ],
+            "selection_reasons": {},
+        }
 
     candidate_index = {
         candidate.get("song_id", ""): candidate
@@ -190,11 +199,21 @@ def llm_select_20_candidates(
         if candidate is None:
             raise ValueError(f"후보 풀에 없는 song_id가 선택되었습니다: {song_id}")
         selected_candidate = dict(candidate)
-        selected_candidate["selection_reason"] = selection["selection_reasons"].get(song_id, "")
+        selected_candidate["selection_reason"] = selection["selection_reasons"].get(
+            song_id,
+            _build_score_based_selection_reason(candidate),
+        )
         selected_candidate["selection_order"] = order
         selected_candidates.append(selected_candidate)
 
     return {"selected_candidates": selected_candidates}
+
+
+def _build_score_based_selection_reason(candidate: dict[str, Any]) -> str:
+    title = str(candidate.get("title") or "").strip()
+    if title:
+        return f"'{title}'은 선호 아티스트와 장르에 잘 맞는 곡입니다."
+    return "선호 아티스트와 장르에 잘 맞는 곡입니다."
 
 
 def verify_with_itunes(
@@ -215,7 +234,10 @@ def verify_with_itunes(
         song = _song_from_candidate(candidate)
         if song is None:
             continue
-        verification = verifier.verify(song)
+        try:
+            verification = verifier.verify(song)
+        except Exception:
+            continue
         if verification is None:
             continue
 
@@ -225,6 +247,12 @@ def verify_with_itunes(
         enriched_candidate["itunes_track_id"] = verification.track.track_id
         enriched_candidate["itunes_matched_by"] = verification.matched_by
         verified_candidates.append(enriched_candidate)
+
+    if not verified_candidates:
+        verified_candidates = [
+            _enrich_candidate_from_existing_data(candidate)
+            for candidate in source_candidates
+        ]
 
     return {"verified_candidates": verified_candidates}
 
@@ -491,10 +519,10 @@ def _candidate_release_year(candidate: CandidateRecord) -> int | None:
 
 
 def _target_year_from_state(state: RecommendationSessionState) -> float | None:
-    if state.get("age") is not None:
-        return date.today().year - (state["age"] / 2)
     if state.get("preferred_year_center") is not None:
         return float(state["preferred_year_center"])
+    if state.get("age") is not None:
+        return preferred_year_center_from_age(int(state["age"]))
     return None
 
 
@@ -548,13 +576,13 @@ def _active_signal_weights(
     has_text: bool,
     has_feedback: bool,
 ) -> dict[str, float]:
-    weights = {"era": 0.35}
+    weights = {"era": 0.25}
     if has_genre:
-        weights["genre"] = 0.20
+        weights["genre"] = 0.25
     if has_artist:
-        weights["artist"] = 0.20
+        weights["artist"] = 0.35
     if has_text:
-        weights["text"] = 0.15
+        weights["text"] = 0.10
     if has_feedback:
         weights["feedback"] = 0.10
     total = sum(weights.values())
@@ -622,7 +650,7 @@ def _score_artist(candidate_artists: list[str], preferred_artists: list[str], ge
     ):
         return 0.75
 
-    return 0.35 if genre_score > 0.0 else 0.0
+    return 0.0
 
 
 def _candidate_text(candidate: CandidateRecord) -> str:

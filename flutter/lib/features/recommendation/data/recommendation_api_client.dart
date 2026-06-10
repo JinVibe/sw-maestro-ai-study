@@ -34,24 +34,22 @@ class RecommendationApiClient {
   Future<BundleDto> recommend({
     required String sessionId,
     required String freeText,
-    String followUpText = '',
   }) async {
     final json = await _postJson('/recommendations', {
       'session_id': sessionId,
       'free_text': freeText,
-      'follow_up_text': followUpText,
     });
 
     return BundleDto.fromJson(json);
   }
 
-  Future<void> submitFeedback({
+  Future<FeedbackDto> submitFeedback({
     required String sessionId,
     required String bundleId,
     required MusicRecommendation recommendation,
     required RecommendationReaction reaction,
   }) async {
-    await _postJson('/feedbacks', {
+    final json = await _postJson('/feedbacks', {
       'session_id': sessionId,
       'bundle_id': bundleId,
       'feedbacks': [
@@ -64,6 +62,19 @@ class RecommendationApiClient {
         },
       ],
     });
+
+    return FeedbackDto.fromJson(json);
+  }
+
+  Future<FollowUpDto> submitFollowUp({
+    required String sessionId,
+    required String text,
+  }) async {
+    final json = await _postJson('/sessions/$sessionId/follow-up', {
+      'text': text,
+    });
+
+    return FollowUpDto.fromJson(json);
   }
 
   Future<List<MusicRecommendation>> fetchLibrary({
@@ -141,5 +152,33 @@ class BundleDto {
           .map(MusicRecommendation.fromApiJson)
           .toList(),
     );
+  }
+}
+
+class FeedbackDto {
+  const FeedbackDto({
+    required this.negativeCount,
+    required this.nextAction,
+  });
+
+  final int negativeCount;
+  final String nextAction;
+
+  factory FeedbackDto.fromJson(Map<String, dynamic> json) {
+    return FeedbackDto(
+      negativeCount:
+          int.tryParse(json['negative_count']?.toString() ?? '') ?? 0,
+      nextAction: json['next_action']?.toString() ?? '',
+    );
+  }
+}
+
+class FollowUpDto {
+  const FollowUpDto({required this.nextAction});
+
+  final String nextAction;
+
+  factory FollowUpDto.fromJson(Map<String, dynamic> json) {
+    return FollowUpDto(nextAction: json['next_action']?.toString() ?? '');
   }
 }

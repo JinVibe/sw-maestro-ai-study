@@ -99,7 +99,7 @@ class RecommendationPage extends ConsumerWidget {
                 const SizedBox(height: 16),
                 Expanded(
                   child: state.isLoading
-                      ? const Center(child: CircularProgressIndicator())
+                      ? const _MemorySearchLoading()
                       : _RecommendationStack(
                           recommendations: state.queue,
                           onSwiped: controller.react,
@@ -289,6 +289,116 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
+class _MemorySearchLoading extends StatefulWidget {
+  const _MemorySearchLoading();
+
+  @override
+  State<_MemorySearchLoading> createState() => _MemorySearchLoadingState();
+}
+
+class _MemorySearchLoadingState extends State<_MemorySearchLoading>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: const Color(0xFF6E594A),
+          fontWeight: FontWeight.w800,
+        );
+
+    return Center(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          final dotCount = (_controller.value * 4).floor().clamp(0, 3).toInt();
+          final animatedDots = List.filled(dotCount, '.').join();
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Transform.rotate(
+                angle: _controller.value * 6.283185307179586,
+                child: Container(
+                  width: 82,
+                  height: 82,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFB78962),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF8A5D3B).withValues(alpha: 0.18),
+                        blurRadius: 22,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color:
+                                const Color(0xFFFFF3DF).withValues(alpha: 0.52),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        width: 18,
+                        height: 18,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFFFFF8ED),
+                        ),
+                      ),
+                      Align(
+                        alignment: const Alignment(0.55, -0.55),
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xFFFFF8ED),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 22),
+              Text(
+                '당신의 추억을 DJ가 열심히 찾고 있는 중$animatedDots',
+                textAlign: TextAlign.center,
+                style: textStyle,
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _WarmHeader extends StatelessWidget {
   const _WarmHeader({
     required this.reminderLabel,
@@ -305,7 +415,7 @@ class _WarmHeader extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            '저녁의\n플레이리스트',
+            '오늘의\n플레이리스트',
             style: Theme.of(context).textTheme.headlineLarge,
           ),
         ),
