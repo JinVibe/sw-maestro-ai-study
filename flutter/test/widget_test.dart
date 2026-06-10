@@ -49,7 +49,6 @@ class _FakeApiClient extends RecommendationApiClient {
   Future<BundleDto> recommend({
     required String sessionId,
     required String freeText,
-    String followUpText = '',
   }) async {
     return BundleDto(
       bundleId: 'bundle_test',
@@ -66,5 +65,26 @@ class _FakeApiClient extends RecommendationApiClient {
         ),
       ],
     );
+  }
+
+  @override
+  Future<FeedbackDto> submitFeedback({
+    required String sessionId,
+    required String bundleId,
+    required MusicRecommendation recommendation,
+    required RecommendationReaction reaction,
+  }) async {
+    return const FeedbackDto(
+      negativeCount: 0,
+      nextAction: 'recommend_next_bundle',
+    );
+  }
+
+  @override
+  Future<FollowUpDto> submitFollowUp({
+    required String sessionId,
+    required String text,
+  }) async {
+    return const FollowUpDto(nextAction: 'recommend_next_bundle');
   }
 }
