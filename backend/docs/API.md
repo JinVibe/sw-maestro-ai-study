@@ -279,7 +279,7 @@
 
 | 변수 | 기본 | 설명 |
 | --- | --- | --- |
-| `CATALOG_PATH` | `ai/data/samples/melon_kpop_sample.jsonl` | 후보 카탈로그 경로 |
+| `CATALOG_PATH` | `ai/data/raw/melon_kpop_2000_2025.jsonl` | 후보 카탈로그 경로 |
 | `UPSTAGE_API_KEY` | (없음) | 실제 추천(LLM 후보 선별)에 필요, `ai/.env`에 설정 |
 | `AI_SKIP_ITUNES_VERIFICATION` | `0` | `1`이면 iTunes 검증 스킵(키/네트워크 불필요) |
 | `AI_SKIP_PREFERENCE_EXPANSION` | `0` | `1`이면 선호 확장 LLM 호출 스킵 |

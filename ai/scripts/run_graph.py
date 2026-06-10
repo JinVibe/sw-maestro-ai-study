@@ -35,7 +35,7 @@ if str(ROOT) not in sys.path:
 
 from ai.orchestrator import build_recommendation_graph, resume_with_feedback, start_recommendation
 
-CATALOG_PATH = "ai/data/samples/melon_kpop_sample.jsonl"
+CATALOG_PATH = "ai/data/raw/melon_kpop_2000_2025.jsonl"
 
 
 def read_json() -> dict:

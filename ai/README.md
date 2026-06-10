@@ -24,11 +24,10 @@ ai/
 │   ├── scoring.py
 │   └── upstage_client.py
 ├── data/
-│   ├── samples/
-│   │   └── melon_kpop_sample.jsonl
-│   ├── embeddings/
-│   │   └── .gitkeep
-│   └── raw/
+│   ├── raw/
+│   │   ├── .gitkeep
+│   │   └── melon_kpop_2000_2025.jsonl
+│   └── embeddings/
 │       └── .gitkeep
 ├── tests/
 │   └── .gitkeep
@@ -37,7 +36,7 @@ ai/
 
 ## Data Policy
 
-GitHub에는 100곡 내외의 샘플 데이터만 커밋합니다.
+실서비스에서 쓰는 원천 데이터는 `ai/data/raw/`에 둡니다.
 
 대용량 원본 데이터는 GitHub에 올리지 않고 Google Drive로 공유합니다. 팀원이 새로 clone한 뒤에는 Drive에서 원본 데이터를 내려받아 `ai/data/raw/`에 넣으면 됩니다.
 
@@ -57,15 +56,15 @@ Google Drive: <원본 데이터 공유 폴더 링크>
 Local path: ai/data/raw/
 ```
 
-## Sample Data
+## Catalog Data
 
-추천 모듈 개발과 테스트는 기본적으로 샘플 데이터로 시작합니다.
+추천 모듈 개발과 서비스 실행은 기본적으로 `ai/data/raw/melon_kpop_2000_2025.jsonl`을 사용합니다.
 
 ```text
-ai/data/samples/melon_kpop_sample.jsonl
+ai/data/raw/melon_kpop_2000_2025.jsonl
 ```
 
-샘플 데이터는 원본 JSONL의 앞 100곡을 복사해 만든 파일입니다. 실제 추천 품질 검증이나 전체 데이터 기반 실험은 `ai/data/raw/`의 원본 데이터를 사용합니다.
+원본 JSONL은 `ai/data/raw/`에 두고, 추천 품질 검증과 실제 서비스 실험은 이 파일을 기준으로 진행합니다.
 
 ## Upstage Solar Embeddings
 
@@ -137,19 +136,19 @@ UPSTAGE_API_KEY=your-api-key
 곡 가사 임베딩 캐시 생성:
 
 ```powershell
-& 'C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m ai.recommender.cli embed-songs --input ai/data/samples/melon_kpop_sample.jsonl --output ai/data/embeddings/lyrics_embeddings.jsonl --batch-size 32
+& 'C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m ai.recommender.cli embed-songs --input ai/data/raw/melon_kpop_2000_2025.jsonl --output ai/data/embeddings/lyrics_embeddings.jsonl --batch-size 32
 ```
 
 추천 실행:
 
 ```powershell
-& 'C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m ai.recommender.cli recommend --catalog ai/data/samples/melon_kpop_sample.jsonl --embeddings ai/data/embeddings/lyrics_embeddings.jsonl --genres 발라드 --artists 조성모 --text "밤에 산책할 때 듣고 싶어요" --age 36 --bundle-size 6
+& 'C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m ai.recommender.cli recommend --catalog ai/data/raw/melon_kpop_2000_2025.jsonl --embeddings ai/data/embeddings/lyrics_embeddings.jsonl --genres 발라드 --artists 조성모 --text "밤에 산책할 때 듣고 싶어요" --age 36 --bundle-size 6
 ```
 
 피드백 이후 재추천처럼 전략 가중치를 명시적으로 넘길 수도 있습니다.
 
 ```powershell
-& 'C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m ai.recommender.cli recommend --catalog ai/data/samples/melon_kpop_sample.jsonl --embeddings ai/data/embeddings/lyrics_embeddings.jsonl --text "밤에 산책할 때 듣고 싶어요" --age 36 --strategy-weights '{"w_theme":0.50,"w_era":0.20,"w_discovery":0.20,"w_quality":0.10}' --bundle-size 6
+& 'C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m ai.recommender.cli recommend --catalog ai/data/raw/melon_kpop_2000_2025.jsonl --embeddings ai/data/embeddings/lyrics_embeddings.jsonl --text "밤에 산책할 때 듣고 싶어요" --age 36 --strategy-weights '{"w_theme":0.50,"w_era":0.20,"w_discovery":0.20,"w_quality":0.10}' --bundle-size 6
 ```
 
 추천 실행에는 fallback 문장을 사용하지 않습니다.
