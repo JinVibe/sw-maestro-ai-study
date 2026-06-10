@@ -26,10 +26,8 @@ def preferred_year_center_from_age(
     if current_year is None:
         current_year = date.today().year
     birth_year = current_year - age
-    start_age_at_release = dataset_start_year - birth_year
-    end_age_at_release = dataset_end_year - birth_year
-    default_target_age_at_release = (start_age_at_release + end_age_at_release) / 2
-    return birth_year + default_target_age_at_release
+    target_year = birth_year + 18
+    return max(dataset_start_year, min(dataset_end_year, target_year))
 
 
 def release_year(song: Song) -> int | None:

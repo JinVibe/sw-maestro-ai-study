@@ -54,6 +54,7 @@ class OrchestratorService:
     ) -> None:
         # 카탈로그(후보 소스)는 서버 시작 시 1회 로드해 재사용한다.
         self.catalog = load_songs(catalog_path)
+        self.catalog.extend(_load_supplemental_catalog(self.catalog))
         self._selector_factory = selector_factory
         self._expander_factory = expander_factory
         self._verifier = verifier
@@ -105,3 +106,21 @@ def _skip_llm_selection() -> bool:
         "true",
         "yes",
     }
+
+
+def _load_supplemental_catalog(existing: list[Any]) -> list[Any]:
+    supplement_path = Path(
+        os.environ.get(
+            "CATALOG_SUPPLEMENT_PATH",
+            "ai/data/samples/modern_kpop_supplement.jsonl",
+        )
+    )
+    if not supplement_path.exists():
+        return []
+
+    existing_ids = {song.song_id for song in existing if getattr(song, "song_id", "")}
+    return [
+        song
+        for song in load_songs(supplement_path)
+        if song.song_id not in existing_ids
+    ]
