@@ -15,7 +15,7 @@ COPY backend /srv/backend
 
 # app(=/srv/backend) 와 ai(=/srv) 둘 다 import 가능하게
 ENV PYTHONPATH=/srv/backend:/srv
-ENV CATALOG_PATH=ai/data/samples/melon_kpop_sample.jsonl
+ENV CATALOG_PATH=ai/data/raw/melon_kpop_2000_2025.jsonl
 ENV PORT=8000
 
 EXPOSE 8000

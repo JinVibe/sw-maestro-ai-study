@@ -9,7 +9,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      CATALOG_PATH: ai/data/samples/melon_kpop_sample.jsonl
+      CATALOG_PATH: ai/data/raw/melon_kpop_2000_2025.jsonl
       # 실제 추천(LLM 후보 선별)에 필요. 호스트 환경변수 또는 .env에서 주입.
       UPSTAGE_API_KEY: ${UPSTAGE_API_KEY:-}
       # 키/네트워크 없이 띄우려면 1 로(검증/선호확장 스킵).

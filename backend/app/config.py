@@ -12,5 +12,5 @@ class Settings:
     @classmethod
     def from_env(cls) -> "Settings":
         return cls(
-            catalog_path=Path(os.environ.get("CATALOG_PATH", "ai/data/samples/melon_kpop_sample.jsonl")),
+            catalog_path=Path(os.environ.get("CATALOG_PATH", "ai/data/raw/melon_kpop_2000_2025.jsonl")),
         )
